@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>chi.codes — CHI/1.0 Developer Reference</title>
+  <meta name="description" content="CHI/1.0 is the open protocol for agent-to-human communication. Humans set the rules. Agents must ask first." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green: #00ff41;
+      --amber: #ffb000;
+      --cyan: #00d4ff;
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: #222222;
+      --text: #e0e0e0;
+      --muted: #606060;
+    }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.7; }
+
+    /* NAV */
+    nav { position: sticky; top: 0; z-index: 100; background: var(--bg); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 52px; }
+    .nav-logo { color: var(--green); font-weight: 700; font-size: 1rem; text-decoration: none; letter-spacing: 0.05em; }
+    .nav-logo span { color: var(--amber); }
+    .nav-links { display: flex; gap: 2rem; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.8rem; transition: color 0.15s; }
+    .nav-links a:hover { color: var(--green); }
+
+    /* HERO */
+    .hero { max-width: 860px; margin: 0 auto; padding: 5rem 2rem 3rem; }
+    .badge { display: inline-block; border: 1px solid var(--green); color: var(--green); font-size: 0.7rem; padding: 0.2rem 0.6rem; border-radius: 2px; margin-bottom: 1.5rem; letter-spacing: 0.1em; }
+    h1 { font-size: 2.4rem; font-weight: 700; color: var(--amber); line-height: 1.2; margin-bottom: 1rem; }
+    .subtitle { color: var(--muted); font-size: 0.95rem; max-width: 600px; margin-bottom: 2.5rem; }
+    .cta-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 3rem; }
+    .btn { padding: 0.6rem 1.4rem; font-family: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: none; border-radius: 2px; transition: all 0.15s; letter-spacing: 0.05em; }
+    .btn-primary { background: var(--green); color: #000; border: 1px solid var(--green); }
+    .btn-primary:hover { background: transparent; color: var(--green); }
+    .btn-outline { background: transparent; color: var(--cyan); border: 1px solid var(--cyan); }
+    .btn-outline:hover { background: var(--cyan); color: #000; }
+
+    /* QUICK START */
+    .section { max-width: 860px; margin: 0 auto; padding: 2rem 2rem; }
+    h2 { color: var(--amber); font-size: 1.1rem; letter-spacing: 0.08em; margin-bottom: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    h3 { color: var(--cyan); font-size: 0.85rem; letter-spacing: 0.05em; margin: 1.5rem 0 0.5rem; }
+    pre { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1.2rem 1.4rem; overflow-x: auto; margin: 0.8rem 0 1.2rem; font-size: 0.82rem; line-height: 1.6; }
+    code { font-family: 'JetBrains Mono', monospace; }
+    .kw { color: var(--cyan); }
+    .str { color: var(--green); }
+    .cm { color: var(--muted); }
+    .key { color: var(--amber); }
+    p { color: var(--text); margin-bottom: 0.8rem; opacity: 0.85; }
+
+    /* CARDS */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1.4rem; transition: border-color 0.15s; }
+    .card:hover { border-color: var(--green); }
+    .card-title { color: var(--green); font-weight: 700; font-size: 0.85rem; margin-bottom: 0.4rem; }
+    .card-desc { color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+    .card a { color: var(--cyan); text-decoration: none; font-size: 0.75rem; display: inline-block; margin-top: 0.8rem; }
+    .card a:hover { color: var(--green); }
+
+    /* ENDPOINTS */
+    .endpoint { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1rem 1.2rem; margin-bottom: 0.6rem; display: flex; align-items: baseline; gap: 1rem; }
+    .method { font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 2px; min-width: 48px; text-align: center; }
+    .method.post { background: #1a3a1a; color: var(--green); border: 1px solid var(--green); }
+    .method.get { background: #1a2a3a; color: var(--cyan); border: 1px solid var(--cyan); }
+    .path { color: var(--text); font-size: 0.82rem; flex: 1; }
+    .edesc { color: var(--muted); font-size: 0.75rem; }
+
+    /* FOOTER */
+    footer { border-top: 1px solid var(--border); margin-top: 4rem; padding: 2rem; text-align: center; color: var(--muted); font-size: 0.75rem; }
+    footer a { color: var(--cyan); text-decoration: none; }
+    footer a:hover { color: var(--green); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/"><span>CHI</span>/1.0</a>
+  <div class="nav-links">
+    <a href="#quickstart">Quick Start</a>
+    <a href="#api">API</a>
+    <a href="#spec">Spec</a>
+    <a href="https://github.com/maco144/ContactHI" target="_blank">GitHub</a>
+    <a href="https://chi.contact" target="_blank">For Humans</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="badge">PROTOCOL // CHI/1.0-draft</div>
+  <h1>The DNS of<br/>human reachability.</h1>
+  <p class="subtitle">
+    CHI/1.0 is an open protocol for agent-to-human communication.
+    Humans declare their rules on-chain. Agents must query before sending.
+    Default policy: <strong style="color:var(--green)">BLOCK</strong>.
+  </p>
+  <div class="cta-row">
+    <a class="btn btn-primary" href="#quickstart">Get Started</a>
+    <a class="btn btn-outline" href="https://github.com/maco144/ContactHI" target="_blank">View on GitHub</a>
+    <a class="btn btn-outline" href="#spec">Read the Spec</a>
+  </div>
+</div>
+
+<div class="section" id="overview">
+  <h2>// OVERVIEW</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="card-title">Preference Registry</div>
+      <div class="card-desc">Humans declare contact rules on-chain (CosmWasm). No company controls it. Default: block all agents.</div>
+      <a href="#registry">→ Registry API</a>
+    </div>
+    <div class="card">
+      <div class="card-title">Message Envelope</div>
+      <div class="card-desc">Standardized CHI envelope: sender DID, ZK entity proof, intent type, priority, TTL, Ed25519 signature.</div>
+      <a href="#envelope">→ Envelope spec</a>
+    </div>
+    <div class="card">
+      <div class="card-title">Router Network</div>
+      <div class="card-desc">Federated router nodes validate envelopes, check preferences, and deliver to declared channels.</div>
+      <a href="https://chi.delivery" target="_blank">→ chi.delivery</a>
+    </div>
+    <div class="card">
+      <div class="card-title">TypeScript SDK</div>
+      <div class="card-desc">@contacthi/sdk — build CHI-conformant agents in minutes. ZK proof generation handled automatically.</div>
+      <a href="#sdk">→ SDK docs</a>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="quickstart">
+  <h2>// QUICK START</h2>
+  <h3>Install the SDK</h3>
+  <pre><code><span class="kw">npm</span> install <span class="str">@contacthi/sdk</span></code></pre>
+
+  <h3>Send a CHI message</h3>
+  <pre><code><span class="kw">import</span> { <span class="key">ChiClient</span> } <span class="kw">from</span> <span class="str">'@contacthi/sdk'</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="key">ChiClient</span>({
+  routerUrl: <span class="str">'https://chi.delivery'</span>,
+  senderDid: <span class="str">'did:chi:your-agent-did'</span>,
+  entityProof: yourZkProof,   <span class="cm">// from Entity Identity</span>
+});
+
+<span class="kw">const</span> result = <span class="kw">await</span> client.<span class="key">send</span>({
+  to: <span class="str">'did:chi:recipient-did'</span>,
+  intent: <span class="str">'INFORM'</span>,          <span class="cm">// INFORM | COLLECT | AUTHORIZE | ESCALATE | RESULT</span>
+  priority: <span class="str">'NORMAL'</span>,
+  ttl: <span class="key">3600</span>,
+  payload: {
+    subject: <span class="str">'Your order has shipped'</span>,
+    body: <span class="str">'Tracking: 1Z999AA10123456784'</span>,
+  },
+});
+
+<span class="cm">// result.status: 'DELIVERED' | 'BLOCKED' | 'QUEUED' | 'NO_PROFILE'</span>
+console.<span class="key">log</span>(result.status);</code></pre>
+
+  <h3>Check preferences before sending (manual)</h3>
+  <pre><code><span class="kw">const</span> pref = <span class="kw">await</span> client.<span class="key">checkPreferences</span>({
+  recipientDid: <span class="str">'did:chi:recipient-did'</span>,
+  intent: <span class="str">'INFORM'</span>,
+  senderType: <span class="str">'AUTONOMOUS_AGENT'</span>,
+});
+
+<span class="kw">if</span> (pref.permitted) {
+  <span class="cm">// safe to send</span>
+}</code></pre>
+</div>
+
+<div class="section" id="api">
+  <h2>// ROUTER API — chi.delivery</h2>
+  <p>The reference router node exposes a simple REST API. All requests require a valid CHI envelope.</p>
+
+  <div class="endpoint">
+    <span class="method post">POST</span>
+    <span class="path">/v1/send</span>
+    <span class="edesc">Submit a CHI envelope for delivery</span>
+  </div>
+  <div class="endpoint">
+    <span class="method get">GET</span>
+    <span class="path">/v1/status/:messageId</span>
+    <span class="edesc">Poll delivery status for a sent message</span>
+  </div>
+  <div class="endpoint">
+    <span class="method get">GET</span>
+    <span class="path">/v1/health</span>
+    <span class="edesc">Router node health check</span>
+  </div>
+
+  <h3>Send envelope</h3>
+  <pre><code><span class="kw">POST</span> https://chi.delivery/v1/send
+<span class="key">Content-Type</span>: application/json
+
+{
+  <span class="key">"version"</span>: <span class="str">"CHI/1.0"</span>,
+  <span class="key">"sender_did"</span>: <span class="str">"did:chi:agent:abc123"</span>,
+  <span class="key">"recipient_did"</span>: <span class="str">"did:chi:human:xyz789"</span>,
+  <span class="key">"intent"</span>: <span class="str">"INFORM"</span>,
+  <span class="key">"priority"</span>: <span class="str">"NORMAL"</span>,
+  <span class="key">"ttl"</span>: <span class="key">3600</span>,
+  <span class="key">"payload"</span>: { <span class="key">"subject"</span>: <span class="str">"..."</span>, <span class="key">"body"</span>: <span class="str">"..."</span> },
+  <span class="key">"entity_proof"</span>: <span class="str">"&lt;zk-proof-hex&gt;"</span>,
+  <span class="key">"signature"</span>: <span class="str">"&lt;ed25519-sig-hex&gt;"</span>,
+  <span class="key">"timestamp"</span>: <span class="key">1773370000</span>
+}</code></pre>
+</div>
+
+<div class="section" id="spec">
+  <h2>// SPECIFICATION</h2>
+  <p>CHI/1.0 is a draft open standard. The full specification is available in the GitHub repository.</p>
+  <div class="cards">
+    <div class="card">
+      <div class="card-title">protocol-spec.md</div>
+      <div class="card-desc">Full CHI/1.0 specification: identity, preference registry, message envelope, router node, delivery channels, ack protocol, error codes.</div>
+      <a href="https://github.com/maco144/ContactHI/blob/main/protocol-spec.md" target="_blank">→ Read the spec</a>
+    </div>
+    <div class="card">
+      <div class="card-title">Intent Types</div>
+      <div class="card-desc">INFORM — one-way notification<br/>COLLECT — request data<br/>AUTHORIZE — request approval<br/>ESCALATE — urgent human decision<br/>RESULT — outcome of prior request</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Entity Types</div>
+      <div class="card-desc">AUTONOMOUS_AGENT · HUMAN_ASSISTED · AUTOMATED_SYSTEM · HYBRID_AGENT · HUMAN_OPERATOR · UNKNOWN</div>
+      <a href="https://github.com/maco144/ContactHI/blob/main/protocol-spec.md#appendix-a" target="_blank">→ Full list</a>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="sdk">
+  <h2>// SDK</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="card-title">@contacthi/sdk (TypeScript)</div>
+      <div class="card-desc">Full CHI/1.0 client. Envelope construction, ZK proof integration, registry queries, delivery status subscriptions.</div>
+      <a href="https://github.com/maco144/ContactHI/tree/main/sdk" target="_blank">→ GitHub</a>
+    </div>
+    <div class="card">
+      <div class="card-title">Router Node</div>
+      <div class="card-desc">Reference router implementation in Node.js. Run your own CHI-conformant router. Docker image available.</div>
+      <a href="https://github.com/maco144/ContactHI/tree/main/router" target="_blank">→ GitHub</a>
+    </div>
+    <div class="card">
+      <div class="card-title">Contracts (CosmWasm)</div>
+      <div class="card-desc">Preference registry smart contract. Deployed on Cosmos testnet Q2 2026. Self-host or use the hosted registry.</div>
+      <a href="https://github.com/maco144/ContactHI/tree/main/contracts" target="_blank">→ GitHub</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>CHI/1.0 is an open protocol. Spread it. &nbsp;|&nbsp;
+    <a href="https://github.com/maco144/ContactHI" target="_blank">GitHub</a> &nbsp;|&nbsp;
+    <a href="https://chi.contact" target="_blank">For Humans</a> &nbsp;|&nbsp;
+    <a href="https://chi.delivery/v1/health" target="_blank">Router Status</a>
+  </p>
+</footer>
+
+</body>
+</html>

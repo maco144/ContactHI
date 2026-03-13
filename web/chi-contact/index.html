@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>chi.contact — You control who can reach you</title>
+  <meta name="description" content="AI agents are about to start contacting you. ContactHI lets you set the rules before they do." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green: #00ff41;
+      --amber: #ffb000;
+      --cyan: #00d4ff;
+      --red: #ff4444;
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #161616;
+      --border: #222222;
+      --text: #e0e0e0;
+      --muted: #606060;
+    }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.7; }
+
+    /* NAV */
+    nav { position: sticky; top: 0; z-index: 100; background: var(--bg); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 52px; }
+    .nav-logo { color: var(--green); font-weight: 700; font-size: 1rem; text-decoration: none; letter-spacing: 0.05em; }
+    .nav-logo span { color: var(--amber); }
+    .nav-right { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-right a { color: var(--muted); text-decoration: none; font-size: 0.8rem; transition: color 0.15s; }
+    .nav-right a:hover { color: var(--green); }
+    .nav-btn { background: transparent; border: 1px solid var(--green); color: var(--green); font-family: inherit; font-size: 0.75rem; padding: 0.3rem 0.9rem; cursor: pointer; border-radius: 2px; text-decoration: none; transition: all 0.15s; }
+    .nav-btn:hover { background: var(--green); color: #000; }
+
+    /* HERO */
+    .hero { max-width: 780px; margin: 0 auto; padding: 6rem 2rem 4rem; text-align: center; }
+    .status-pill { display: inline-flex; align-items: center; gap: 0.5rem; border: 1px solid var(--border); color: var(--muted); font-size: 0.72rem; padding: 0.25rem 0.8rem; border-radius: 999px; margin-bottom: 2rem; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    h1 { font-size: 2.6rem; font-weight: 700; line-height: 1.15; margin-bottom: 1.2rem; }
+    h1 .line1 { color: var(--text); }
+    h1 .line2 { color: var(--green); }
+    .hero-sub { color: var(--muted); font-size: 0.95rem; max-width: 520px; margin: 0 auto 2.5rem; }
+    .waitlist-form { display: flex; gap: 0.75rem; max-width: 420px; margin: 0 auto 1rem; }
+    .waitlist-form input { flex: 1; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: inherit; font-size: 0.85rem; padding: 0.65rem 1rem; border-radius: 2px; outline: none; transition: border-color 0.15s; }
+    .waitlist-form input:focus { border-color: var(--green); }
+    .waitlist-form input::placeholder { color: var(--muted); }
+    .waitlist-form button { background: var(--green); color: #000; border: none; font-family: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.65rem 1.2rem; border-radius: 2px; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
+    .waitlist-form button:hover { opacity: 0.85; }
+    .form-note { color: var(--muted); font-size: 0.72rem; text-align: center; }
+    #form-success { display: none; color: var(--green); font-size: 0.85rem; text-align: center; padding: 0.75rem; border: 1px solid var(--green); border-radius: 2px; max-width: 420px; margin: 0 auto; }
+
+    /* PROBLEM SECTION */
+    .section { max-width: 860px; margin: 0 auto; padding: 3rem 2rem; }
+    h2 { font-size: 1.1rem; color: var(--amber); letter-spacing: 0.08em; margin-bottom: 1.5rem; }
+    .timeline { border-left: 1px solid var(--border); padding-left: 1.5rem; }
+    .timeline-item { position: relative; margin-bottom: 1.5rem; }
+    .timeline-item::before { content: ''; position: absolute; left: -1.6rem; top: 0.45rem; width: 8px; height: 8px; border-radius: 50%; background: var(--border); border: 1px solid var(--muted); }
+    .timeline-item.bad::before { background: var(--red); border-color: var(--red); }
+    .timeline-item.good::before { background: var(--green); border-color: var(--green); }
+    .tl-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.2rem; letter-spacing: 0.08em; }
+    .tl-text { font-size: 0.88rem; color: var(--text); }
+    .tl-text strong { color: var(--amber); }
+
+    /* HOW IT WORKS */
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin: 1rem 0; }
+    .step { background: var(--surface); padding: 1.5rem; }
+    .step-num { color: var(--green); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; margin-bottom: 0.5rem; }
+    .step-title { color: var(--text); font-size: 0.85rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .step-desc { color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+
+    /* PREFERENCE PREVIEW */
+    .pref-preview { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1.4rem 1.6rem; font-size: 0.82rem; line-height: 1.8; }
+    .pref-preview .label { color: var(--muted); font-size: 0.7rem; letter-spacing: 0.08em; margin-bottom: 0.8rem; }
+    .pref-row { display: flex; justify-content: space-between; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
+    .pref-row:last-child { border-bottom: none; }
+    .pref-key { color: var(--text); }
+    .pref-val { color: var(--green); font-weight: 500; }
+    .pref-val.block { color: var(--red); }
+    .pref-val.warn { color: var(--amber); }
+
+    /* COMPARISON */
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin: 1rem 0; }
+    .compare-col { background: var(--surface); padding: 1.4rem; }
+    .compare-col.bad { background: #120a0a; }
+    .compare-col.good { background: #0a120a; }
+    .compare-header { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    .compare-col.bad .compare-header { color: var(--red); }
+    .compare-col.good .compare-header { color: var(--green); }
+    .compare-item { font-size: 0.8rem; color: var(--muted); padding: 0.3rem 0; display: flex; align-items: flex-start; gap: 0.5rem; }
+    .compare-item::before { font-size: 0.7rem; flex-shrink: 0; padding-top: 0.1rem; }
+    .compare-col.bad .compare-item::before { content: '✗'; color: var(--red); }
+    .compare-col.good .compare-item::before { content: '✓'; color: var(--green); }
+
+    /* FOOTER */
+    footer { border-top: 1px solid var(--border); margin-top: 4rem; padding: 2rem; text-align: center; color: var(--muted); font-size: 0.75rem; }
+    footer a { color: var(--cyan); text-decoration: none; }
+    footer a:hover { color: var(--green); }
+
+    @media (max-width: 600px) {
+      h1 { font-size: 1.8rem; }
+      .compare { grid-template-columns: 1fr; }
+      .waitlist-form { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/"><span>CHI</span>.contact</a>
+  <div class="nav-right">
+    <a href="https://chi.codes" target="_blank">Developers</a>
+    <a href="https://chi.delivery/v1/health" target="_blank">Status</a>
+    <a class="nav-btn" href="#waitlist">Early Access</a>
+  </div>
+</nav>
+
+<div class="hero" id="waitlist">
+  <div class="status-pill"><div class="dot"></div> Early Access — Q3 2026</div>
+  <h1>
+    <span class="line1">You control who<br/>can reach you.</span>
+  </h1>
+  <p class="hero-sub">
+    AI agents are entering production. They will contact you — unless you set the rules first.
+    ContactHI lets you declare your reachability preferences on-chain, before any agent sends anything.
+  </p>
+  <form class="waitlist-form" id="waitlistForm" onsubmit="handleSubmit(event)">
+    <input type="email" placeholder="your@email.com" required id="emailInput" />
+    <button type="submit">Get Early Access</button>
+  </form>
+  <div id="form-success">✓ You're on the list. We'll reach out before anyone else can.</div>
+  <p class="form-note">No spam. We use ContactHI to contact you — obviously.</p>
+</div>
+
+<div class="section">
+  <h2>// THE PROBLEM</h2>
+  <div class="timeline">
+    <div class="timeline-item bad">
+      <div class="tl-label">TODAY</div>
+      <div class="tl-text">An AI agent wants to notify you. Its operator picks a Twilio number and your phone rings. <strong>You never consented.</strong></div>
+    </div>
+    <div class="timeline-item bad">
+      <div class="tl-label">Q1 2026</div>
+      <div class="tl-text">Twilio launches "Agent-to-Human" — <strong>opt-out</strong>. The operator still sets the rules. The human still tries to block after the fact.</div>
+    </div>
+    <div class="timeline-item bad">
+      <div class="tl-label">EU AI ACT — AUG 2026</div>
+      <div class="tl-text">Enterprises running AI agents in Europe need auditable records of agent-to-human contact. <strong>No platform provides this.</strong></div>
+    </div>
+    <div class="timeline-item good">
+      <div class="tl-label">CHI/1.0</div>
+      <div class="tl-text">You declare your rules on-chain. Agents must query before sending. <strong>Default: block everything.</strong></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>// HOW IT WORKS</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01 // DECLARE</div>
+      <div class="step-title">Set your rules</div>
+      <div class="step-desc">Define which agent types may contact you, through which channels, how often, and during what hours.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">02 // REGISTER</div>
+      <div class="step-title">Publish on-chain</div>
+      <div class="step-desc">Your preference profile is stored on Cosmos. No company controls it. You own it with your private key.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">03 // ENFORCE</div>
+      <div class="step-title">Agents must ask first</div>
+      <div class="step-desc">Any CHI-conformant agent must query your profile before sending. If you said block, no conformant router delivers it.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">04 // AUDIT</div>
+      <div class="step-title">Full history on-chain</div>
+      <div class="step-desc">Every contact attempt, permission grant, and delivery is logged. You have a complete, immutable record.</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>// YOUR PREFERENCE PROFILE</h2>
+  <p style="margin-bottom:1rem; opacity:0.7;">A preview of what your profile looks like on-chain:</p>
+  <div class="pref-preview">
+    <div class="label">// did:chi:human:your-address — preference profile</div>
+    <div class="pref-row"><span class="pref-key">default_policy</span><span class="pref-val block">BLOCK</span></div>
+    <div class="pref-row"><span class="pref-key">autonomous_agents → INFORM</span><span class="pref-val">push_notification, max 20/day, 8am–10pm</span></div>
+    <div class="pref-row"><span class="pref-key">autonomous_agents → AUTHORIZE</span><span class="pref-val warn">push or SMS only, max 5/day</span></div>
+    <div class="pref-row"><span class="pref-key">autonomous_agents → ESCALATE</span><span class="pref-val warn">SMS only, any hour</span></div>
+    <div class="pref-row"><span class="pref-key">unknown_agents → *</span><span class="pref-val block">BLOCK</span></div>
+    <div class="pref-row"><span class="pref-key">whitelist</span><span class="pref-val">did:chi:agent:my-trading-bot</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>// vs. THE ALTERNATIVES</h2>
+  <div class="compare">
+    <div class="compare-col bad">
+      <div class="compare-header">✗ TWILIO A2H / EXISTING PLATFORMS</div>
+      <div class="compare-item">Operator-controlled, opt-out</div>
+      <div class="compare-item">No on-chain preference state</div>
+      <div class="compare-item">No audit trail for compliance</div>
+      <div class="compare-item">Single company controls the rules</div>
+      <div class="compare-item">Defaults to maximum reach</div>
+    </div>
+    <div class="compare-col good">
+      <div class="compare-header">✓ CONTACTHI / CHI/1.0</div>
+      <div class="compare-item">Human-controlled, opt-in</div>
+      <div class="compare-item">On-chain preference registry (CosmWasm)</div>
+      <div class="compare-item">Immutable audit trail, EU AI Act compliant</div>
+      <div class="compare-item">Open protocol — no company controls it</div>
+      <div class="compare-item">Default policy: BLOCK</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>// EARLY ACCESS</h2>
+  <p style="opacity:0.7; margin-bottom:1.5rem;">The preference registry launches Q3 2026. Early access users get:</p>
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap:0.6rem; margin-bottom:2rem;">
+    <div style="background:var(--surface); border:1px solid var(--border); padding:1rem; border-radius:4px; font-size:0.8rem; color:var(--muted);">✓ <span style="color:var(--text)">First preference profiles</span> on testnet</div>
+    <div style="background:var(--surface); border:1px solid var(--border); padding:1rem; border-radius:4px; font-size:0.8rem; color:var(--muted);">✓ <span style="color:var(--text)">Direct input</span> on the preference model</div>
+    <div style="background:var(--surface); border:1px solid var(--border); padding:1rem; border-radius:4px; font-size:0.8rem; color:var(--muted);">✓ <span style="color:var(--text)">Founding user status</span> — permanent in protocol history</div>
+  </div>
+  <form class="waitlist-form" style="margin:0" onsubmit="handleSubmit(event)">
+    <input type="email" placeholder="your@email.com" required />
+    <button type="submit">Join Early Access</button>
+  </form>
+</div>
+
+<footer>
+  <p>
+    ContactHI is open protocol infrastructure. &nbsp;|&nbsp;
+    <a href="https://chi.codes" target="_blank">Developer Docs</a> &nbsp;|&nbsp;
+    <a href="https://chi.delivery/v1/health" target="_blank">Router Status</a> &nbsp;|&nbsp;
+    <a href="https://github.com/maco144/ContactHI" target="_blank">GitHub</a>
+  </p>
+</footer>
+
+<script>
+function handleSubmit(e) {
+  e.preventDefault();
+  document.getElementById('form-success').style.display = 'block';
+  document.getElementById('waitlistForm').style.display = 'none';
+  // TODO: wire to actual waitlist backend
+}
+</script>
+
+</body>
+</html>
