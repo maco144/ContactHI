@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { pipeline, env } from '@huggingface/transformers'
+import { pipeline, env } from '@xenova/transformers'
 import type { DetectionPlugin, DetectionRequest, DetectionResult } from '../plugin.js'
 
 const MODEL_ID = 'Xenova/roberta-base-openai-detector'

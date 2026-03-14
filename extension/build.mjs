@@ -8,14 +8,14 @@ const watch = process.argv.includes('--watch')
 
 // ── WASM runtime files (fully local — no CDN) ─────────────────────────────────
 const ortSrc = resolve(__dirname, 'node_modules/onnxruntime-web/dist')
-const tfSrc  = resolve(__dirname, 'node_modules/@huggingface/transformers/dist')
+const tfSrc  = resolve(__dirname, 'node_modules/@xenova/transformers/dist')
 const ortDst = resolve(__dirname, 'dist/ort')
 mkdirSync(ortDst, { recursive: true })
 
 const wasmFiles = [
+  [ortSrc, 'ort-wasm.wasm'],
+  [ortSrc, 'ort-wasm-simd.wasm'],
   [ortSrc, 'ort-wasm-simd-threaded.wasm'],
-  [ortSrc, 'ort-wasm-simd-threaded.jsep.wasm'],
-  [tfSrc,  'ort-wasm-simd-threaded.jsep.mjs'],
 ]
 for (const [src, file] of wasmFiles) {
   const full = `${src}/${file}`
@@ -25,32 +25,31 @@ for (const [src, file] of wasmFiles) {
   }
 }
 
-// ── Vendor: bundle transformers.js + onnxruntime-* into one self-contained ESM ─
-// transformers.web.min.js uses bare specifiers (onnxruntime-common, etc.) that
-// Chrome extension service workers can't resolve. We bundle all JS deps into one
-// file, leaving WASM files external (loaded at runtime via wasmPaths config).
+// ── Vendor: bundle @xenova/transformers into one self-contained ESM ───────────
+// transformers.min.js uses bare specifiers (onnxruntime-node, etc.) that Chrome
+// extension service workers can't resolve. Bundle all JS deps into one file,
+// leaving WASM files external to load at runtime via wasmPaths.
 const vendorDst = resolve(__dirname, 'dist/vendor')
 mkdirSync(vendorDst, { recursive: true })
 
 await esbuild.build({
-  entryPoints: [`${tfSrc}/transformers.web.min.js`],
+  entryPoints: [`${tfSrc}/transformers.min.js`],
   bundle: true,
   outfile: 'dist/vendor/transformers.bundle.js',
   format: 'esm',
   platform: 'browser',
   target: 'es2020',
-  // Leave WASM/MJS runtime files external — loaded at runtime via wasmPaths
   external: ['*.wasm', '*.mjs'],
   define: { 'process.env.NODE_ENV': '"production"' },
   logLevel: 'warning',
 })
 console.log('✓ transformers bundle → dist/vendor/transformers.bundle.js')
 
-// ── esbuild plugin: redirect @huggingface/transformers to local bundle ─────────
+// ── esbuild plugin: redirect @xenova/transformers to local bundle ─────────────
 const redirectTransformers = {
   name: 'redirect-transformers',
   setup(build) {
-    build.onResolve({ filter: /^@huggingface\/transformers$/ }, () => ({
+    build.onResolve({ filter: /^@xenova\/transformers$/ }, () => ({
       path: './vendor/transformers.bundle.js',
       external: true,
     }))
