@@ -1,0 +1,17 @@
+{
+  "name": "@contacthi/extension",
+  "version": "0.1.0",
+  "description": "ContactHI Shield — browser extension for CHI/1.0 enforcement",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.4.0"
+  }
+}

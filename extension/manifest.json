@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "ContactHI Shield",
+  "version": "0.1.0",
+  "description": "Enforce your CHI contact preferences — detect and filter AI-generated content in your inbox and browser.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["dist/content-gmail.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content-general.js"],
+      "run_at": "document_idle",
+      "exclude_matches": ["https://mail.google.com/*"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html"
+}
