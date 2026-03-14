@@ -1,3 +1,13 @@
+// Capture any top-level import or startup errors before anything else runs
+self.addEventListener('error', (event) => {
+  const msg = `SW error: ${event.message} (${event.filename}:${event.lineno})`
+  chrome.storage.local.set({ modelError: msg, modelStatus: { state: 'error', message: msg } })
+})
+self.addEventListener('unhandledrejection', (event) => {
+  const msg = `SW unhandled rejection: ${String((event as PromiseRejectionEvent).reason)}`
+  chrome.storage.local.set({ modelError: msg, modelStatus: { state: 'error', message: msg } })
+})
+
 import { getSettings } from '../shared/storage.js'
 import { registerPlugin, getPlugin } from '../detection/registry.js'
 import { StubDetectionAdapter, LocalModelAdapter } from '../detection/adapters/index.js'

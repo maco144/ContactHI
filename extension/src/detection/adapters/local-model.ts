@@ -45,6 +45,9 @@ export class LocalModelAdapter implements DetectionPlugin {
     // Point WASM runtime to locally bundled files — nothing leaves the device
     if (env.backends?.onnx?.wasm) {
       env.backends.onnx.wasm.wasmPaths = chrome.runtime.getURL('dist/ort/')
+      // Force single-threaded CPU WASM — SharedArrayBuffer is not available
+      // in extension service workers, and JSEP (GPU) path breaks in this context
+      env.backends.onnx.wasm.numThreads = 1
     }
     env.useBrowserCache = true
 
