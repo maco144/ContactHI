@@ -1,23 +1,48 @@
 import * as esbuild from 'esbuild'
-import { copyFileSync, mkdirSync } from 'fs'
+import { copyFileSync, mkdirSync, existsSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const watch = process.argv.includes('--watch')
 
-// Copy WASM runtime files so inference runs fully on-device (no CDN needed)
-const ortSrc = resolve(__dirname, 'node_modules/onnxruntime-web/dist')
+// ── Vendor: pre-built transformers.js browser bundle ─────────────────────────
+// We use the pre-built bundle rather than re-bundling with esbuild.
+// Re-bundling breaks transformers.js internal dynamic module loading.
+const tfSrc = resolve(__dirname, 'node_modules/@huggingface/transformers/dist')
+const tfDst = resolve(__dirname, 'dist/vendor')
+mkdirSync(tfDst, { recursive: true })
+copyFileSync(`${tfSrc}/transformers.web.min.js`, `${tfDst}/transformers.min.js`)
+console.log('✓ transformers.web.min.js → dist/vendor/transformers.min.js')
+
+// ── WASM runtime files (fully local — no CDN) ─────────────────────────────────
 const ortDst = resolve(__dirname, 'dist/ort')
 mkdirSync(ortDst, { recursive: true })
-for (const f of ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.jsep.wasm']) {
-  try {
-    copyFileSync(`${ortSrc}/${f}`, `${ortDst}/${f}`)
-  } catch {
-    // file may not exist in all onnxruntime-web versions — skip silently
+const wasmSources = [
+  [resolve(__dirname, 'node_modules/onnxruntime-web/dist'), 'ort-wasm-simd-threaded.wasm'],
+  [resolve(__dirname, 'node_modules/onnxruntime-web/dist'), 'ort-wasm-simd-threaded.jsep.wasm'],
+  [tfSrc, 'ort-wasm-simd-threaded.jsep.mjs'],
+]
+for (const [src, file] of wasmSources) {
+  const full = `${src}/${file}`
+  if (existsSync(full)) {
+    copyFileSync(full, `${ortDst}/${file}`)
+    console.log(`✓ ${file} → dist/ort/`)
   }
 }
-console.log('✓ WASM runtime copied → dist/ort/')
+
+// ── esbuild plugin: redirect @huggingface/transformers to local pre-built file ─
+// The output import becomes: import { ... } from './vendor/transformers.min.js'
+// which Chrome resolves relative to dist/background.js → dist/vendor/transformers.min.js
+const redirectTransformers = {
+  name: 'redirect-transformers',
+  setup(build) {
+    build.onResolve({ filter: /^@huggingface\/transformers$/ }, () => ({
+      path: './vendor/transformers.min.js',
+      external: true,
+    }))
+  },
+}
 
 const contentEntries = [
   { entryPoints: ['src/content/gmail.ts'], outfile: 'dist/content-gmail.js' },
@@ -26,6 +51,16 @@ const contentEntries = [
   { entryPoints: ['src/options/options.ts'], outfile: 'dist/options.js' },
 ]
 
+const bgConfig = {
+  entryPoints: ['src/background/service-worker.ts'],
+  outfile: 'dist/background.js',
+  bundle: true,
+  platform: 'browser',
+  target: 'es2020',
+  format: /** @type {const} */ ('esm'),
+  plugins: [redirectTransformers],
+}
+
 const contentShared = {
   bundle: true,
   platform: 'browser',
@@ -33,24 +68,16 @@ const contentShared = {
   format: /** @type {const} */ ('iife'),
 }
 
-// Service worker must be ESM for MV3 "type": "module" + transformers.js
-const bgShared = {
-  bundle: true,
-  platform: 'browser',
-  target: 'es2020',
-  format: /** @type {const} */ ('esm'),
-}
-
 if (watch) {
   const [bgCtx, ...contentCtxs] = await Promise.all([
-    esbuild.context({ ...bgShared, entryPoints: ['src/background/service-worker.ts'], outfile: 'dist/background.js' }),
+    esbuild.context(bgConfig),
     ...contentEntries.map((e) => esbuild.context({ ...contentShared, ...e })),
   ])
   await Promise.all([bgCtx.watch(), ...contentCtxs.map((c) => c.watch())])
   console.log('Watching for changes…')
 } else {
   await Promise.all([
-    esbuild.build({ ...bgShared, entryPoints: ['src/background/service-worker.ts'], outfile: 'dist/background.js' }),
+    esbuild.build(bgConfig),
     ...contentEntries.map((e) => esbuild.build({ ...contentShared, ...e })),
   ])
   console.log('✓ Build complete')

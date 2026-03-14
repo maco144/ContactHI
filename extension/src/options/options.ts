@@ -94,6 +94,15 @@ async function init() {
     providerList.appendChild(card)
   }
 
+  // Show model error if present
+  const errorResult = await chrome.storage.local.get('modelError')
+  if (errorResult.modelError) {
+    const box = document.getElementById('modelErrorBox')!
+    const msg = document.getElementById('modelErrorMsg')!
+    box.style.display = 'block'
+    msg.textContent = errorResult.modelError
+  }
+
   // Save
   const saveBtn = document.getElementById('saveBtn')!
   const savedMsg = document.getElementById('savedMsg')!

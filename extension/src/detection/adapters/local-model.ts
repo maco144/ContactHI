@@ -16,6 +16,17 @@ async function setModelStatus(status: ModelStatus): Promise<void> {
   chrome.runtime.sendMessage({ type: 'MODEL_STATUS', status }).catch(() => {})
 }
 
+/**
+ * Keep the service worker alive during the model download.
+ * Chrome kills idle service workers after ~30s; a 66MB download can take longer.
+ */
+function startKeepalive(): () => void {
+  const interval = setInterval(() => {
+    chrome.runtime.getPlatformInfo().catch(() => {})
+  }, 20_000)
+  return () => clearInterval(interval)
+}
+
 export class LocalModelAdapter implements DetectionPlugin {
   readonly name = 'local-model'
   readonly version = '1.0.0'
@@ -31,12 +42,13 @@ export class LocalModelAdapter implements DetectionPlugin {
   private getClassifier(): Promise<any> {
     if (this.classifierPromise) return this.classifierPromise
 
-    // Point WASM runtime to locally bundled files — no network call for the runtime
+    // Point WASM runtime to locally bundled files — nothing leaves the device
     if (env.backends?.onnx?.wasm) {
       env.backends.onnx.wasm.wasmPaths = chrome.runtime.getURL('dist/ort/')
     }
-    // Models cached in Cache API after first download
     env.useBrowserCache = true
+
+    const stopKeepalive = startKeepalive()
 
     this.classifierPromise = (async () => {
       try {
@@ -48,7 +60,7 @@ export class LocalModelAdapter implements DetectionPlugin {
               await setModelStatus({
                 state: 'downloading',
                 progress: typeof p.progress === 'number' ? Math.round(p.progress) : 0,
-                file: typeof p.file === 'string' ? p.file.split('/').pop() ?? p.file : '',
+                file: typeof p.file === 'string' ? (p.file.split('/').pop() ?? '') : '',
               })
             } else if (p.status === 'loading') {
               await setModelStatus({ state: 'loading' })
@@ -61,8 +73,12 @@ export class LocalModelAdapter implements DetectionPlugin {
       } catch (err) {
         const message = String(err)
         await setModelStatus({ state: 'error', message })
+        // Store full error so options page can show it
+        await chrome.storage.local.set({ modelError: message })
         this.classifierPromise = null
         throw err
+      } finally {
+        stopKeepalive()
       }
     })()
 
@@ -78,7 +94,7 @@ export class LocalModelAdapter implements DetectionPlugin {
     const output: any = await classifier(text, { truncation: true, max_length: 512 })
     const top = Array.isArray(output) ? output[0] : output
 
-    // Xenova/roberta-base-openai-detector labels: 'Real' (human) | 'Fake' (AI)
+    // Model labels: 'Real' = human-written, 'Fake' = AI-generated
     const isAI = top.label === 'Fake' || top.label === 'LABEL_1'
     const confidence = isAI ? top.score : 1 - top.score
 
