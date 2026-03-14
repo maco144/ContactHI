@@ -13,8 +13,8 @@ export interface ExtensionSettings {
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   enabled: true,
-  detectionProvider: 'stub',
+  detectionProvider: 'local-model',
   detectionProviderConfig: {},
-  confidenceThreshold: 0.5,
+  confidenceThreshold: 0.3,
   action: 'label',
 }

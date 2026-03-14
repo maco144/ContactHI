@@ -10,28 +10,16 @@ interface ProviderDef {
 
 const PROVIDERS: ProviderDef[] = [
   {
-    id: 'stub',
-    name: 'Built-in Heuristics',
-    description: 'Phrase-based detection — no API key needed. Start here.',
+    id: 'local-model',
+    name: 'On-Device AI (RoBERTa)',
+    description: 'Real ML inference — runs entirely in your browser. No data ever leaves your device. Downloads ~66MB on first use.',
     config: [],
   },
   {
-    id: 'gptzero',
-    name: 'GPTZero',
-    description: 'State-of-the-art classifier. Requires a GPTZero API key.',
-    config: [{ key: 'apiKey', label: 'API Key', placeholder: 'gz-…' }],
-  },
-  {
-    id: 'winston-ai',
-    name: 'Winston AI',
-    description: 'High-accuracy AI content detection. Requires a Winston AI API key.',
-    config: [{ key: 'apiKey', label: 'API Key', placeholder: 'wai-…' }],
-  },
-  {
-    id: 'originality',
-    name: 'Originality.ai',
-    description: 'AI + plagiarism detection. Requires an Originality.ai API key.',
-    config: [{ key: 'apiKey', label: 'API Key', placeholder: 'ori-…' }],
+    id: 'stub',
+    name: 'Built-in Heuristics',
+    description: 'Phrase and pattern matching — no download needed. Less accurate but instant. Useful as a fallback.',
+    config: [],
   },
 ]
 

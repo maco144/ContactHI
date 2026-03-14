@@ -1,19 +1,17 @@
 import { getSettings } from '../shared/storage.js'
 import { registerPlugin, getPlugin } from '../detection/registry.js'
-import {
-  StubDetectionAdapter,
-  GPTZeroAdapter,
-  WinstonAIAdapter,
-  OriginalityAdapter,
-} from '../detection/adapters/index.js'
+import { StubDetectionAdapter, LocalModelAdapter } from '../detection/adapters/index.js'
 import type { Message } from '../shared/messages.js'
 import type { DetectionRequest, DetectionResult } from '../detection/plugin.js'
+import type { ModelStatus } from '../detection/adapters/local-model.js'
 
-// Register all available adapters on startup
+// Register adapters — local-model is the default, stub is the fallback
+const localModel = new LocalModelAdapter()
+registerPlugin(localModel)
 registerPlugin(new StubDetectionAdapter())
-registerPlugin(new GPTZeroAdapter())
-registerPlugin(new WinstonAIAdapter())
-registerPlugin(new OriginalityAdapter())
+
+// Warm up the model immediately so it's ready before the first email is opened
+localModel.detect({ text: 'warmup', contentType: 'unknown' }).catch(() => {})
 
 chrome.runtime.onMessage.addListener(
   (message: Message, _sender, sendResponse): boolean => {
@@ -23,6 +21,12 @@ chrome.runtime.onMessage.addListener(
     }
     if (message.type === 'GET_SETTINGS') {
       getSettings().then(sendResponse)
+      return true
+    }
+    if (message.type === 'GET_MODEL_STATUS') {
+      chrome.storage.local.get('modelStatus').then((result) => {
+        sendResponse((result.modelStatus ?? { state: 'idle' }) as ModelStatus)
+      })
       return true
     }
     return false
@@ -53,15 +57,6 @@ async function handleDetection(
     ...settings.detectionProviderConfig,
   })
 
-  if (!plugin.isConfigured()) {
-    return {
-      isAI: false,
-      confidence: 0,
-      provider: plugin.name,
-      error: 'Provider not configured — check Settings for required API key',
-    }
-  }
-
   const request: DetectionRequest = {
     text: message.text,
     contentType: message.contentType as DetectionRequest['contentType'],
@@ -71,11 +66,14 @@ async function handleDetection(
   try {
     return await plugin.detect(request)
   } catch (err) {
-    return {
-      isAI: false,
-      confidence: 0,
-      provider: plugin.name,
-      error: String(err),
+    // If local model fails, fall back to stub silently
+    if (settings.detectionProvider === 'local-model') {
+      const stub = getPlugin('stub')
+      if (stub) {
+        stub.configure({ threshold: String(settings.confidenceThreshold) })
+        return await stub.detect(request)
+      }
     }
+    return { isAI: false, confidence: 0, provider: plugin.name, error: String(err) }
   }
 }
