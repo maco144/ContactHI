@@ -6,24 +6,18 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const watch = process.argv.includes('--watch')
 
-// ── Vendor: pre-built transformers.js browser bundle ─────────────────────────
-// We use the pre-built bundle rather than re-bundling with esbuild.
-// Re-bundling breaks transformers.js internal dynamic module loading.
-const tfSrc = resolve(__dirname, 'node_modules/@huggingface/transformers/dist')
-const tfDst = resolve(__dirname, 'dist/vendor')
-mkdirSync(tfDst, { recursive: true })
-copyFileSync(`${tfSrc}/transformers.web.min.js`, `${tfDst}/transformers.min.js`)
-console.log('✓ transformers.web.min.js → dist/vendor/transformers.min.js')
-
 // ── WASM runtime files (fully local — no CDN) ─────────────────────────────────
+const ortSrc = resolve(__dirname, 'node_modules/onnxruntime-web/dist')
+const tfSrc  = resolve(__dirname, 'node_modules/@huggingface/transformers/dist')
 const ortDst = resolve(__dirname, 'dist/ort')
 mkdirSync(ortDst, { recursive: true })
-const wasmSources = [
-  [resolve(__dirname, 'node_modules/onnxruntime-web/dist'), 'ort-wasm-simd-threaded.wasm'],
-  [resolve(__dirname, 'node_modules/onnxruntime-web/dist'), 'ort-wasm-simd-threaded.jsep.wasm'],
-  [tfSrc, 'ort-wasm-simd-threaded.jsep.mjs'],
+
+const wasmFiles = [
+  [ortSrc, 'ort-wasm-simd-threaded.wasm'],
+  [ortSrc, 'ort-wasm-simd-threaded.jsep.wasm'],
+  [tfSrc,  'ort-wasm-simd-threaded.jsep.mjs'],
 ]
-for (const [src, file] of wasmSources) {
+for (const [src, file] of wasmFiles) {
   const full = `${src}/${file}`
   if (existsSync(full)) {
     copyFileSync(full, `${ortDst}/${file}`)
@@ -31,14 +25,33 @@ for (const [src, file] of wasmSources) {
   }
 }
 
-// ── esbuild plugin: redirect @huggingface/transformers to local pre-built file ─
-// The output import becomes: import { ... } from './vendor/transformers.min.js'
-// which Chrome resolves relative to dist/background.js → dist/vendor/transformers.min.js
+// ── Vendor: bundle transformers.js + onnxruntime-* into one self-contained ESM ─
+// transformers.web.min.js uses bare specifiers (onnxruntime-common, etc.) that
+// Chrome extension service workers can't resolve. We bundle all JS deps into one
+// file, leaving WASM files external (loaded at runtime via wasmPaths config).
+const vendorDst = resolve(__dirname, 'dist/vendor')
+mkdirSync(vendorDst, { recursive: true })
+
+await esbuild.build({
+  entryPoints: [`${tfSrc}/transformers.web.min.js`],
+  bundle: true,
+  outfile: 'dist/vendor/transformers.bundle.js',
+  format: 'esm',
+  platform: 'browser',
+  target: 'es2020',
+  // Leave WASM/MJS runtime files external — loaded at runtime via wasmPaths
+  external: ['*.wasm', '*.mjs'],
+  define: { 'process.env.NODE_ENV': '"production"' },
+  logLevel: 'warning',
+})
+console.log('✓ transformers bundle → dist/vendor/transformers.bundle.js')
+
+// ── esbuild plugin: redirect @huggingface/transformers to local bundle ─────────
 const redirectTransformers = {
   name: 'redirect-transformers',
   setup(build) {
     build.onResolve({ filter: /^@huggingface\/transformers$/ }, () => ({
-      path: './vendor/transformers.min.js',
+      path: './vendor/transformers.bundle.js',
       external: true,
     }))
   },
