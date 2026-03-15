@@ -42,14 +42,17 @@ export class LocalModelAdapter implements DetectionPlugin {
   private getClassifier(): Promise<any> {
     if (this.classifierPromise) return this.classifierPromise
 
+    // Skip local model path lookup — no local models bundled, go straight to remote
+    env.allowLocalModels = false
+    env.useBrowserCache = true
+
     // Point WASM runtime to locally bundled files — nothing leaves the device
     if (env.backends?.onnx?.wasm) {
       env.backends.onnx.wasm.wasmPaths = chrome.runtime.getURL('dist/ort/')
       // Force single-threaded CPU WASM — SharedArrayBuffer is not available
-      // in extension service workers, and JSEP (GPU) path breaks in this context
+      // in extension service workers
       env.backends.onnx.wasm.numThreads = 1
     }
-    env.useBrowserCache = true
 
     const stopKeepalive = startKeepalive()
 
