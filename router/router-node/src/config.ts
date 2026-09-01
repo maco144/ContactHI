@@ -3,6 +3,10 @@ export const config = {
   node_id: process.env.NODE_ID || 'contacthi-node-local',
   cosmos_rpc: process.env.COSMOS_RPC || 'https://rpc.cosmos.directory/cosmoshub',
   registry_contract: process.env.REGISTRY_CONTRACT || '',
+  // CHI is consent-first: with no registry contract there is nothing to enforce
+  // against, and every permission check trivially grants. Running that way is a
+  // deliberate act, not a default — see `assertConsentPosture` in index.ts.
+  allow_no_registry: process.env.CHI_ALLOW_NO_REGISTRY === 'true',
   spacetimedb_url: process.env.SPACETIMEDB_URL || 'http://localhost:3000',
   spacetimedb_db: process.env.SPACETIMEDB_DB || 'contacthi',
   nullcone_url: process.env.NULLCONE_URL || 'https://nullcone.example.com',

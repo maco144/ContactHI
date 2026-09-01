@@ -1,6 +1,6 @@
 # Project Index: ContactHI
 
-Generated: 2026-03-14
+Generated: 2026-09-01
 
 ## Overview
 
@@ -30,7 +30,7 @@ ContactHI/
 │   │       ├── routes/           # HTTP endpoints
 │   │       ├── middleware/       # Validation + rate limiting
 │   │       └── services/         # Registry, delivery, SpacetimeDB, Nullcone
-│   └── spacetimedb-module/       # SpacetimeDB reducer module (Rust)
+│   └── spacetimedb-module/       # SpacetimeDB reducer module (Rust, 2.0.4)
 │       └── src/lib.rs            # Tables and reducers
 ├── sdk/                          # @contacthi/sdk (TypeScript)
 │   └── src/
@@ -40,6 +40,14 @@ ContactHI/
 │       ├── did.ts                # DID utilities
 │       ├── types.ts              # All TypeScript types
 │       └── errors.ts             # Error classes
+├── extension/                    # "ContactHI Shield" — MV3 browser extension
+│   └── src/
+│       ├── background/           # Service worker; plugin registration
+│       ├── content/              # gmail.ts, general.ts, ui.ts injectors
+│       ├── detection/            # Pluggable AI-detection provider interface
+│       ├── options/              # Provider + policy configuration UI
+│       ├── popup/                # Toolbar popup
+│       └── shared/               # types, storage, message passing
 └── web/
     ├── chi-codes/index.html      # Developer landing (chi.codes)
     └── chi-contact/index.html    # User preference registration (chi.contact)
@@ -55,6 +63,7 @@ ContactHI/
 | SDK | `sdk/src/index.ts` | All public exports |
 | Contract | `contracts/src/lib.rs` | CosmWasm module entrypoint |
 | SpacetimeDB | `router/spacetimedb-module/src/lib.rs` | Reducer module |
+| Extension | `extension/src/background/service-worker.ts` | MV3 service worker |
 
 ---
 
@@ -87,8 +96,21 @@ CHI envelope structural validation (version, DIDs, intent format, TTL, clock ske
 `createEnvelope()`, `signEnvelope()` (Ed25519), `verifyEnvelope()`, `validateEnvelope()`, `isExpired()`.
 
 ### router/spacetimedb-module/src/lib.rs
-SpacetimeDB tables: **messages**, **acks**, **preference_cache**, **router_nodes**.
-Reducers: `submit_message`, `update_ack`, `cache_preferences`, `register_node`, `expire_messages`.
+SpacetimeDB tables: **messages**, **acks**, **preference_cache**, **router_nodes**, **agent_inbox**.
+Reducers: `submit_message`, `update_ack`, `cache_preferences`, `register_node`,
+`write_agent_inbox`, `mark_inbox_read`, `expire_messages`.
+
+⚠️ **Pinned to `spacetimedb = "=2.0.4"`** to match the engine on rising exactly. Do not
+relax to `"2.0"` — that resolves to 2.9.x, which compiles but is a different module ABI.
+All reducers take **scalar** arguments, so the router sends a flat positional JSON array;
+keep the two in step when changing a signature.
+
+### extension/src/detection/plugin.ts
+`DetectionPlugin` — the provider interface behind ContactHI Shield. CHI owns the policy
+(what the human declared); a plugin owns the signal (is this content AI-generated?).
+Add a provider by implementing the interface under `src/detection/adapters/`, registering
+it in `src/background/service-worker.ts`, and listing it in `PROVIDERS` in
+`src/options/options.ts`.
 
 ---
 
@@ -101,10 +123,17 @@ Reducers: `submit_message`, `update_ack`, `cache_preferences`, `register_node`, 
 | `router/router-node/Dockerfile` | Multi-stage Docker build (node:22-alpine) |
 | `sdk/package.json` | SDK deps: @noble/ed25519 2.0, @cosmjs/cosmwasm-stargate 0.32 |
 | `sdk/tsconfig.json` | TypeScript 5 config |
+| `extension/manifest.json` | MV3 manifest — Gmail + all-urls content scripts, HF host perms |
+| `extension/build.mjs` | esbuild bundler (`npm run build` / `watch`) |
 
-**Required env vars for router**: `REGISTRY_CONTRACT` (CosmWasm address)
+**Required env vars for router**: `REGISTRY_CONTRACT` (CosmWasm address). The router
+**refuses to start** without it unless `CHI_ALLOW_NO_REGISTRY=true` is set — with no
+registry there are no declared rules to read, so every permission check trivially grants
+and the node is not consent-first. In that posture delivery is limited to `agent-inbox`,
+every ungoverned grant is logged, and `/v1/health` reports
+`registry.consent_enforcement: "none"`.
 
-**Optional env vars**: `PORT`, `NODE_ID`, `COSMOS_RPC`, `SPACETIMEDB_URL`, `SPACETIMEDB_DB`, `NULLCONE_URL`, `FCM_KEY`, `TWILIO_*`, `SMTP_*`
+**Optional env vars**: `PORT`, `NODE_ID`, `COSMOS_RPC`, `SPACETIMEDB_URL`, `SPACETIMEDB_DB`, `NULLCONE_URL`, `NODE_ENDPOINT_URL`, `FCM_KEY`, `TWILIO_*`, `SMTP_*`
 
 ---
 
@@ -140,6 +169,29 @@ Reducers: `submit_message`, `update_ack`, `cache_preferences`, `register_node`, 
 | `cosmwasm-std` | 1.5 | Rust CosmWasm contract SDK |
 | `cw-storage-plus` | 1.2 | Contract storage abstractions |
 | `uuid` | 9.0 | Message ID generation |
+
+---
+
+## 🚢 Deployment (as of 2026-09-01)
+
+| Host | Serves | Where |
+|---|---|---|
+| `chi.delivery` | Router node, :8016 | `chi-router` container, host network, on **rising** (`45.77.104.159`) |
+| `chi.codes` | Static dev landing | `/opt/services/contacthi/chi-codes` |
+| `chi.contact` | Static preference UI | `/opt/services/contacthi/chi-contact` |
+
+- Compose + env: `/opt/services/contacthi/router/docker-compose.prod.yml` and `.env`
+- Build source on the box: `~/ContactHI-build/router-node` (rsynced; the durable fix is
+  cloning this repo). Image `chi-router:latest`; rollback tag `chi-router:pre-20260901`.
+- SpacetimeDB runs natively via `spacetimedb.service` at `localhost:3000`, engine **2.0.4**,
+  datadir `/data/volumes/spacetimedb`. Publish with
+  `spacetime publish --server local --bin-path <wasm> contacthi` — the CLI's
+  `default_server` is `maincloud`, so **always pass `--server local`** or it 401s.
+- Database `contacthi` identity:
+  `c2001c46adcb5053e82af22c7fe31358aeeb9c0049902417e0ea42054d24fc21` (first published
+  2026-09-01; it had never existed before — see `~/rising-rescue/docs/`).
+- Query it with `curl -X POST --data 'SELECT COUNT(*) AS n FROM t'
+  http://127.0.0.1:3000/v1/database/contacthi/sql` — aggregates require a column alias.
 
 ---
 

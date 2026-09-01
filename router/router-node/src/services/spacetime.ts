@@ -1,11 +1,15 @@
 /**
  * SpacetimeDB HTTP client for the ContactHI router node.
  *
- * SpacetimeDB exposes a REST API for calling reducers and querying tables.
- * All reducer calls are POST requests to:
- *   POST /database/call/{reducer_name}
- * Table reads use the SQL query endpoint:
- *   POST /database/sql
+ * Targets the SpacetimeDB 2.x HTTP API, which is versioned under /v1:
+ *   POST /v1/database/{name}/call/{reducer}   body: JSON array of positional args
+ *   POST /v1/database/{name}/sql              body: the raw SQL string
+ *
+ * The SQL endpoint returns an array of statement results, each shaped
+ * `{ schema: { elements: [{ name: { some: "col" }, ... }] }, rows: [[...]] }` —
+ * rows are POSITIONAL, not keyed, and nullable columns arrive as the tagged
+ * values `{ "some": v }` / `{ "none": [] }`. `decodeRows` below turns that back
+ * into plain objects.
  *
  * Reference: https://spacetimedb.com/docs/http-api
  */
@@ -33,7 +37,7 @@ export interface SpacetimeAck {
 // ---------------------------------------------------------------------------
 
 function baseUrl(): string {
-  return `${config.spacetimedb_url}/database/${config.spacetimedb_db}`;
+  return `${config.spacetimedb_url}/v1/database/${config.spacetimedb_db}`;
 }
 
 async function callReducer(
@@ -61,6 +65,50 @@ async function callReducer(
   }
 }
 
+interface SqlStatementResult {
+  schema: { elements: Array<{ name: { some?: string; none?: unknown[] } }> };
+  rows: unknown[][];
+}
+
+/**
+ * Encode a `Option<T>` reducer argument. SpacetimeDB rejects a bare value and a
+ * bare `null` alike — an Option is a sum type and has to arrive tagged by
+ * variant name (`some` is variant 0, `none` is variant 1 carrying unit).
+ */
+function option<T>(value: T | null | undefined): Record<string, unknown> {
+  return value === null || value === undefined ? { none: [] } : { some: value };
+}
+
+/**
+ * Decode a sum-typed column. The SQL endpoint returns options positionally as
+ * `[tag, payload]` — `[0, v]` for some, `[1, []]` for none — while other
+ * surfaces use the named form `{some: v}` / `{none: []}`. Accept both.
+ */
+function unwrapOption(value: unknown): unknown {
+  if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'number') {
+    return value[0] === 0 ? value[1] : null;
+  }
+  if (value !== null && typeof value === 'object') {
+    const tagged = value as Record<string, unknown>;
+    if ('some' in tagged) return tagged.some;
+    if ('none' in tagged) return null;
+  }
+  return value;
+}
+
+/** Turn one positional statement result into keyed objects. */
+function decodeRows<T>(result: SqlStatementResult | undefined): T[] {
+  if (!result) return [];
+  const columns = result.schema.elements.map((el) => el.name.some ?? '');
+  return result.rows.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      obj[col] = unwrapOption(row[i]);
+    });
+    return obj as T;
+  });
+}
+
 async function querySql<T>(sql: string): Promise<T[]> {
   const { default: fetch } = await import('node-fetch');
 
@@ -69,9 +117,9 @@ async function querySql<T>(sql: string): Promise<T[]> {
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'text/plain',
     },
-    body: JSON.stringify({ query: sql }),
+    body: sql,
     signal: AbortSignal.timeout(8_000),
   });
 
@@ -80,9 +128,8 @@ async function querySql<T>(sql: string): Promise<T[]> {
     throw new Error(`SpacetimeDB SQL query failed (HTTP ${response.status}): ${text}`);
   }
 
-  // SpacetimeDB returns { rows: [...] }
-  const result = (await response.json()) as { rows: T[] };
-  return result.rows;
+  const results = (await response.json()) as SqlStatementResult[];
+  return decodeRows<T>(results[0]);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,21 +143,21 @@ async function querySql<T>(sql: string): Promise<T[]> {
 export async function submitMessage(message: ChiEnvelope): Promise<void> {
   const expiresAt = message.created_at + message.ttl_seconds * 1_000;
 
-  const stdbMessage = {
-    message_id: message.message_id,
-    sender_did: message.sender_did,
-    sender_type: message.sender_type,
-    recipient_did: message.recipient_did,
-    intent: message.intent,
-    priority: message.priority ?? 128,
-    ttl_seconds: message.ttl_seconds,
-    payload_type: message.payload_type,
-    created_at: message.created_at,
-    expires_at: expiresAt,
-    router_node: config.node_id,
-  };
-
-  await callReducer('submit_message', [stdbMessage]);
+  // Positional, in the order declared by the reducer in
+  // router/spacetimedb-module/src/lib.rs. Keep the two in step.
+  await callReducer('submit_message', [
+    message.message_id,
+    message.sender_did,
+    message.sender_type,
+    message.recipient_did,
+    message.intent,
+    message.priority ?? 128,
+    message.ttl_seconds,
+    message.payload_type,
+    message.created_at,
+    expiresAt,
+    config.node_id,
+  ]);
 }
 
 /**
@@ -126,8 +173,8 @@ export async function updateAck(
   await callReducer('update_ack', [
     message_id,
     status,
-    channel ?? null,
-    error ?? null,
+    option(channel),
+    option(error),
   ]);
 }
 
@@ -167,19 +214,18 @@ export async function writeToAgentInbox(
   recipient_did: string,
   message: ChiEnvelope
 ): Promise<void> {
-  const inboxEntry = {
-    message_id: message.message_id,
+  // Positional, in the order declared by the reducer in
+  // router/spacetimedb-module/src/lib.rs. `read` is set false by the module.
+  await callReducer('write_agent_inbox', [
+    message.message_id,
     recipient_did,
-    sender_did: message.sender_did,
-    sender_type: message.sender_type,
-    intent: message.intent,
-    payload_type: message.payload_type,
-    payload_json: JSON.stringify(message.payload),
-    created_at: message.created_at,
-    read: false,
-  };
-
-  await callReducer('write_agent_inbox', [inboxEntry]);
+    message.sender_did,
+    message.sender_type,
+    message.intent,
+    message.payload_type,
+    JSON.stringify(message.payload),
+    message.created_at,
+  ]);
 }
 
 // ---------------------------------------------------------------------------

@@ -75,7 +75,36 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: 'INTERNAL_ERROR', message: 'An unexpected error occurred' });
 });
 
+/**
+ * CHI's whole claim is that no message is delivered unless the recipient's
+ * declared rules allow it. With no REGISTRY_CONTRACT there are no declared
+ * rules to read, so every check grants — the node serves, but it is not a
+ * consent-first router. Running in that posture has to be chosen explicitly.
+ */
+function assertConsentPosture(): void {
+  if (config.registry_contract) return;
+
+  if (!config.allow_no_registry) {
+    console.error(
+      '[startup] REGISTRY_CONTRACT is not set, so no consent can be enforced and every\n' +
+        '          permission check would trivially grant. Refusing to start.\n' +
+        '          Set REGISTRY_CONTRACT to the CosmWasm registry address, or set\n' +
+        '          CHI_ALLOW_NO_REGISTRY=true to run unenforced on purpose.'
+    );
+    process.exit(1);
+  }
+
+  console.warn(
+    '[startup] ⚠️  CONSENT ENFORCEMENT OFF — CHI_ALLOW_NO_REGISTRY=true and no\n' +
+      '          REGISTRY_CONTRACT is set. Every permission check will grant, and\n' +
+      '          /v1/health reports consent_enforcement: "none". Delivery is limited\n' +
+      '          to the agent-inbox channel.'
+  );
+}
+
 async function main() {
+  assertConsentPosture();
+
   // Register this node with SpacetimeDB on startup
   try {
     await registerNode();

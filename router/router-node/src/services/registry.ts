@@ -91,6 +91,21 @@ export async function checkPermission(
   // Extract the Cosmos address from the recipient DID (did:cosmos:<chain>:<address>)
   const recipientAddress = didToAddress(recipient_did);
 
+  // No registry contract → nothing to enforce against. Say so in the result
+  // rather than letting it read as a genuine "this recipient has no rules".
+  if (!config.registry_contract) {
+    console.warn(
+      `[registry] UNENFORCED: granting ${sender_did} → ${recipient_did} (${intent}) ` +
+        'because REGISTRY_CONTRACT is not set. No consent was checked.'
+    );
+    return {
+      granted: true,
+      reason: 'NO_REGISTRY_CONFIGURED',
+      // Without a registry we will not reach a human on an external channel.
+      allowed_channels: ['agent-inbox'],
+    };
+  }
+
   let prefs: HumanPreferences | null = null;
   try {
     prefs = await getPreferences(recipientAddress);

@@ -105,6 +105,12 @@ docker run -p 3001:3001 -e REGISTRY_CONTRACT=cosmos1... chi-router
 
 The `REGISTRY_CONTRACT` (the CosmWasm registry address) is the only required variable. Delivery-channel credentials (FCM, Twilio, SMTP) are optional — see [Configuration](#configuration).
 
+Without it there are no on-chain rules to read, so every permission check trivially grants
+and the node is **not** consent-first. Rather than let that happen quietly, the router
+refuses to start unless you opt in with `CHI_ALLOW_NO_REGISTRY=true` — which limits
+delivery to the `agent-inbox` channel, logs every ungoverned grant, and makes
+`/v1/health` report `registry.consent_enforcement: "none"`.
+
 ### Build the smart contract
 
 ```bash
@@ -159,6 +165,8 @@ Router node environment variables:
 | `PORT` | `3001` | |
 | `NODE_ID` | `contacthi-node-local` | Must be unique in the federation |
 | `REGISTRY_CONTRACT` | — | **Required** — CosmWasm bech32 address |
+| `CHI_ALLOW_NO_REGISTRY` | `false` | `true` to run with consent enforcement off, on purpose |
+| `NODE_ENDPOINT_URL` | `http://localhost:$PORT` | Advertised to peers in `router_nodes` |
 | `COSMOS_RPC` | `https://rpc.cosmos.directory/cosmoshub` | |
 | `SPACETIMEDB_URL` | `http://localhost:3000` | |
 | `SPACETIMEDB_DB` | `contacthi` | |

@@ -32,6 +32,9 @@ healthRouter.get('/', (_req: Request, res: Response) => {
     registry: {
       cosmos_rpc: config.cosmos_rpc,
       contract: config.registry_contract || null,
+      // Peers and senders need to know whether this node actually enforces
+      // consent before they trust a grant from it.
+      consent_enforcement: config.registry_contract ? 'on-chain' : 'none',
     },
     nullcone: {
       url: config.nullcone_url,
