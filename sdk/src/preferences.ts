@@ -12,6 +12,7 @@
  */
 
 import { CosmWasmClient } from '@cosmjs/cosmwasm-stargate'
+import { intentClass } from './types'
 import type {
   HumanPreferences,
   PreferenceRule,
@@ -21,8 +22,8 @@ import type {
   ChainPreferencesResponse,
   ChainPermissionResponse,
 } from './types'
-import { ReachError, RouterError, ConfigError } from './errors'
-import { addressFromDID, createDID } from './did'
+import { ChiError, RouterError, ConfigError } from './errors'
+import { addressFromDID } from './did'
 
 // ---------------------------------------------------------------------------
 // Types for router preference write API
@@ -82,7 +83,7 @@ export class PreferencesManager {
 
     // Prefer direct on-chain query when RPC + registry are configured
     if (this.cosmos_rpc && this.registry_address) {
-      return this._queryChainPreferences(address, target)
+      return this._queryChainPreferences(address)
     }
 
     // Fallback: ask the router to proxy the query
@@ -93,7 +94,9 @@ export class PreferencesManager {
    * Register a new preference profile on-chain.
    * Fails if preferences already exist — use `update` to replace them.
    */
-  async register(prefs: Omit<HumanPreferences, 'did' | 'updated_at'>): Promise<void> {
+  // `owner` and `updated_at` are set on-chain from the signing account and
+  // block time; a caller cannot supply them.
+  async register(prefs: Omit<HumanPreferences, 'owner' | 'updated_at'>): Promise<void> {
     const sender_did = this._requireSenderDID()
     await this._routerWrite({
       action: 'register',
@@ -115,7 +118,7 @@ export class PreferencesManager {
     // Fetch current preferences to fill in any omitted fields
     const current = await this.get(sender_did)
     if (!current) {
-      throw new ReachError(
+      throw new ChiError(
         'RECIPIENT_NOT_FOUND',
         'No preferences found for this DID. Use register() first.'
       )
@@ -149,7 +152,7 @@ export class PreferencesManager {
    */
   async removeRule(index: number): Promise<void> {
     if (!Number.isInteger(index) || index < 0) {
-      throw new ReachError('INVALID_ENVELOPE', 'index must be a non-negative integer')
+      throw new ChiError('INVALID_ENVELOPE', 'index must be a non-negative integer')
     }
     const sender_did = this._requireSenderDID()
     await this._routerWrite({
@@ -166,7 +169,7 @@ export class PreferencesManager {
    */
   async blockSender(pattern: string): Promise<void> {
     if (!pattern || !pattern.trim()) {
-      throw new ReachError('INVALID_ENVELOPE', 'pattern must be a non-empty string')
+      throw new ChiError('INVALID_ENVELOPE', 'pattern must be a non-empty string')
     }
     const sender_did = this._requireSenderDID()
     await this._routerWrite({
@@ -181,7 +184,7 @@ export class PreferencesManager {
    */
   async unblockSender(pattern: string): Promise<void> {
     if (!pattern || !pattern.trim()) {
-      throw new ReachError('INVALID_ENVELOPE', 'pattern must be a non-empty string')
+      throw new ChiError('INVALID_ENVELOPE', 'pattern must be a non-empty string')
     }
     const sender_did = this._requireSenderDID()
     await this._routerWrite({
@@ -222,14 +225,13 @@ export class PreferencesManager {
   // -------------------------------------------------------------------------
 
   private async _queryChainPreferences(
-    address: string,
-    originalDID: string
+    address: string
   ): Promise<HumanPreferences | null> {
     let client: CosmWasmClient
     try {
       client = await CosmWasmClient.connect(this.cosmos_rpc!)
     } catch (err) {
-      throw new ReachError(
+      throw new ChiError(
         'ROUTER_ERROR',
         `Failed to connect to Cosmos RPC: ${String(err)}`
       )
@@ -249,15 +251,15 @@ export class PreferencesManager {
       ) {
         return null
       }
-      throw new ReachError('ROUTER_ERROR', `Chain query failed: ${msg}`)
+      throw new ChiError('ROUTER_ERROR', `Chain query failed: ${msg}`)
     }
 
     return {
-      did: originalDID.startsWith('did:') ? originalDID : createDID(originalDID),
+      owner: response.owner,
       rules: response.rules,
       default_policy: response.default_policy,
-      webhook_url: response.webhook_url ?? undefined,
-      updated_at: new Date(response.updated_at * 1000).toISOString(),
+      webhook_url: response.webhook_url ?? null,
+      updated_at: response.updated_at,
     }
   }
 
@@ -271,7 +273,7 @@ export class PreferencesManager {
     try {
       client = await CosmWasmClient.connect(this.cosmos_rpc!)
     } catch (err) {
-      throw new ReachError(
+      throw new ChiError(
         'ROUTER_ERROR',
         `Failed to connect to Cosmos RPC: ${String(err)}`
       )
@@ -284,11 +286,13 @@ export class PreferencesManager {
           sender_did,
           sender_type,
           recipient: recipient_address,
-          intent,
+          // The registry matches rules on the coarse Intent class, not the
+          // granular wire intent — `inform.shipping_update` queries as `inform`.
+          intent: intentClass(intent),
         },
       }) as ChainPermissionResponse
     } catch (err) {
-      throw new ReachError('ROUTER_ERROR', `Chain permission query failed: ${String(err)}`)
+      throw new ChiError('ROUTER_ERROR', `Chain permission query failed: ${String(err)}`)
     }
 
     return {
@@ -352,7 +356,7 @@ export class PreferencesManager {
       const text = await res.text()
       // Map well-known router error messages to typed errors
       if (res.status === 403 || text.includes('Permission') || text.includes('Unauthorized')) {
-        throw new ReachError('PERMISSION_DENIED', text)
+        throw new ChiError('PERMISSION_DENIED', text)
       }
       throw new RouterError(res.status, text)
     }

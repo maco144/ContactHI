@@ -19,10 +19,10 @@ pub struct Message {
     #[primary_key]
     pub message_id: String,
     pub sender_did: String,
-    /// EntityType code (e.g. "human", "agent", "service")
+    /// Entity Identity code (CA, LM, GN, AA, RB, DR, VH, US, CP, HS) — spec §4.3
     pub sender_type: String,
     pub recipient_did: String,
-    /// CHI intent string (e.g. "message.send", "payment.request")
+    /// CHI intent, `class.action` (e.g. "inform.shipping_update") — spec §6.3
     pub intent: String,
     /// 0–255; higher is more urgent
     pub priority: u8,
@@ -35,6 +35,24 @@ pub struct Message {
     pub expires_at: u64,
     /// ID of the router node that accepted this message
     pub router_node: String,
+}
+
+/// Threading links: which message a given message responds to (spec §9.3).
+///
+/// This is deliberately a separate table rather than a `reply_to` column on
+/// `messages`. SpacetimeDB 2.0.4 requires a `#[default(...)]` to add a column
+/// to a populated table, and the macro emits that expression inside
+/// `const _: () = {}` — so a `String` default cannot compile (String has a
+/// destructor and is not const-constructible). Adding a table is additive and
+/// needs no migration; adding the column would have meant destroying the
+/// database. Not worth losing data over a field placement.
+#[spacetimedb::table(name = "message_threads", accessor = message_threads, public)]
+pub struct MessageThread {
+    /// The reply's own message_id
+    #[primary_key]
+    pub message_id: String,
+    /// The message_id being responded to
+    pub reply_to: String,
 }
 
 /// Delivery acknowledgement — one row per message, updated as it progresses.
@@ -89,7 +107,7 @@ pub struct AgentInboxEntry {
     pub message_id: String,
     pub recipient_did: String,
     pub sender_did: String,
-    /// EntityType code (e.g. "human", "agent", "service")
+    /// Entity Identity code (CA, LM, GN, AA, RB, DR, VH, US, CP, HS) — spec §4.3
     pub sender_type: String,
     pub intent: String,
     pub payload_type: String,
@@ -130,6 +148,7 @@ pub fn submit_message(
     created_at: u64,
     expires_at: u64,
     router_node: String,
+    reply_to: String,
 ) {
     let ts = now_ms(ctx);
 
@@ -166,6 +185,14 @@ pub fn submit_message(
         expires_at,
         router_node: router_node.clone(),
     });
+
+    // Record the threading link only when this message is actually a reply.
+    if !reply_to.is_empty() {
+        ctx.db.message_threads().insert(MessageThread {
+            message_id: message_id.clone(),
+            reply_to,
+        });
+    }
 
     // Seed the ack row as pending.
     ctx.db.acks().insert(Ack {

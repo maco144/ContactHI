@@ -7,7 +7,7 @@
 
 import { PreferencesManager } from '../src/preferences'
 import type { HumanPreferences, PreferenceRule, PermissionResult } from '../src/types'
-import { RouterError, ConfigError, ReachError } from '../src/errors'
+import { RouterError, ConfigError, ChiError } from '../src/errors'
 
 // ---------------------------------------------------------------------------
 // Mock @cosmjs/cosmwasm-stargate
@@ -52,17 +52,18 @@ const SENDER_DID = 'did:chi:cosmos1sender0000000000000000000000000'
 const SENDER_ADDRESS = 'cosmos1sender0000000000000000000000000'
 
 const SAMPLE_RULE: PreferenceRule = {
+  // Rules match the coarse on-chain Intent class, not the wire intent.
   sender_type: 'AA',
-  intent: 'INFORM',
+  intent: 'inform',
   allowed_channels: ['email', 'push'],
 }
 
 const SAMPLE_PREFS: HumanPreferences = {
-  did: SENDER_DID,
+  owner: SENDER_ADDRESS,
   rules: [SAMPLE_RULE],
   default_policy: 'block',
   webhook_url: 'https://example.com/webhook',
-  updated_at: new Date().toISOString(),
+  updated_at: Math.floor(Date.now() / 1000),
 }
 
 /** Chain response shape from CosmWasm */
@@ -123,7 +124,7 @@ describe('PreferencesManager.get()', () => {
       get_preferences: { address: SENDER_ADDRESS },
     })
     expect(result).not.toBeNull()
-    expect(result!.did).toBe(SENDER_DID)
+    expect(result!.owner).toBe(SENDER_ADDRESS)
     expect(result!.rules).toEqual([SAMPLE_RULE])
     expect(result!.default_policy).toBe('block')
   })
@@ -249,11 +250,11 @@ describe('PreferencesManager.update()', () => {
     expect(updateBody.payload.default_policy).toBe('allow')
   })
 
-  it('throws ReachError RECIPIENT_NOT_FOUND when no existing preferences', async () => {
+  it('throws ChiError RECIPIENT_NOT_FOUND when no existing preferences', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404, text: async () => 'Not found' })
     const mgr = makeManager()
 
-    await expect(mgr.update({ default_policy: 'allow' })).rejects.toThrow(ReachError)
+    await expect(mgr.update({ default_policy: 'allow' })).rejects.toThrow(ChiError)
   })
 })
 
@@ -290,14 +291,14 @@ describe('PreferencesManager.removeRule()', () => {
     expect(body.payload.index).toBe(2)
   })
 
-  it('throws ReachError for negative index', async () => {
+  it('throws ChiError for negative index', async () => {
     const mgr = makeManager()
-    await expect(mgr.removeRule(-1)).rejects.toThrow(ReachError)
+    await expect(mgr.removeRule(-1)).rejects.toThrow(ChiError)
   })
 
-  it('throws ReachError for non-integer index', async () => {
+  it('throws ChiError for non-integer index', async () => {
     const mgr = makeManager()
-    await expect(mgr.removeRule(1.5)).rejects.toThrow(ReachError)
+    await expect(mgr.removeRule(1.5)).rejects.toThrow(ChiError)
   })
 })
 
@@ -327,10 +328,10 @@ describe('PreferencesManager.blockSender()', () => {
     expect(body.payload.pattern).toBe('spam.example.com')
   })
 
-  it('throws ReachError for empty pattern', async () => {
+  it('throws ChiError for empty pattern', async () => {
     const mgr = makeManager()
-    await expect(mgr.blockSender('')).rejects.toThrow(ReachError)
-    await expect(mgr.blockSender('   ')).rejects.toThrow(ReachError)
+    await expect(mgr.blockSender('')).rejects.toThrow(ChiError)
+    await expect(mgr.blockSender('   ')).rejects.toThrow(ChiError)
   })
 })
 
@@ -374,7 +375,7 @@ describe('PreferencesManager.checkPermission()', () => {
     const result = await mgr.checkPermission(
       'did:chi:cosmos1sender0000000000000000000000000',
       'AA',
-      'INFORM'
+      'inform.notice'
     )
 
     expect(mockQueryContractSmart).toHaveBeenCalledWith(REGISTRY, {
@@ -382,7 +383,7 @@ describe('PreferencesManager.checkPermission()', () => {
         sender_did: 'did:chi:cosmos1sender0000000000000000000000000',
         sender_type: 'AA',
         recipient: SENDER_ADDRESS,
-        intent: 'INFORM',
+        intent: 'inform',
       },
     })
     expect(result.allowed).toBe(true)
@@ -397,7 +398,7 @@ describe('PreferencesManager.checkPermission()', () => {
     const result = await mgr.checkPermission(
       'did:chi:cosmos1sender0000000000000000000000000',
       'AA',
-      'INFORM'
+      'inform.notice'
     )
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -410,7 +411,7 @@ describe('PreferencesManager.checkPermission()', () => {
   it('throws ConfigError when no recipient DID is determinable', async () => {
     const mgr = new PreferencesManager({ router_url: ROUTER_URL })
     await expect(
-      mgr.checkPermission('did:chi:cosmos1sender', 'AA', 'INFORM')
+      mgr.checkPermission('did:chi:cosmos1sender', 'AA', 'inform.notice')
     ).rejects.toThrow(ConfigError)
   })
 
@@ -422,7 +423,7 @@ describe('PreferencesManager.checkPermission()', () => {
       rate_limit_remaining: null,
     })
     const mgr = makeManagerWithChain()
-    const result = await mgr.checkPermission('did:chi:cosmos1sender', 'AA', 'INFORM')
+    const result = await mgr.checkPermission('did:chi:cosmos1sender', 'AA', 'inform.notice')
 
     expect(result.reason).toBeUndefined()
     expect(result.rate_limit_remaining).toBeUndefined()

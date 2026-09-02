@@ -1,13 +1,13 @@
 /**
- * Tests for client.ts — ReachClient
+ * Tests for client.ts — ChiClient
  *
  * HTTP calls are mocked via jest's global fetch mock.
  * CosmWasm calls are mocked via jest.mock('@cosmjs/cosmwasm-stargate').
  */
 
-import { ReachClient } from '../src/client'
+import { ChiClient } from '../src/client'
 import type { DeliveryAck, PermissionResult } from '../src/types'
-import { RouterError, ConfigError, TimeoutError, ReachError } from '../src/errors'
+import { RouterError, ConfigError, TimeoutError, ChiError } from '../src/errors'
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -39,8 +39,8 @@ const SENDER_DID = 'did:chi:cosmos1sender0000000000000000000000000'
 const RECIPIENT_DID = 'did:chi:cosmos1recipient000000000000000000000'
 const TEST_PRIVATE_KEY = 'a'.repeat(64) // 32 bytes
 
-function makeClient(overrides?: Partial<ConstructorParameters<typeof ReachClient>[0]>) {
-  return new ReachClient({
+function makeClient(overrides?: Partial<ConstructorParameters<typeof ChiClient>[0]>) {
+  return new ChiClient({
     router_url: ROUTER_URL,
     sender_did: SENDER_DID,
     sender_type: 'AA',
@@ -85,14 +85,14 @@ beforeEach(() => {
 // Constructor
 // ---------------------------------------------------------------------------
 
-describe('ReachClient constructor', () => {
+describe('ChiClient constructor', () => {
   it('constructs successfully with minimal config', () => {
-    const client = new ReachClient({ router_url: ROUTER_URL })
-    expect(client).toBeInstanceOf(ReachClient)
+    const client = new ChiClient({ router_url: ROUTER_URL })
+    expect(client).toBeInstanceOf(ChiClient)
   })
 
   it('throws ConfigError when router_url is missing', () => {
-    expect(() => new ReachClient({ router_url: '' })).toThrow(ConfigError)
+    expect(() => new ChiClient({ router_url: '' })).toThrow(ConfigError)
   })
 
   it('exposes a preferences manager', () => {
@@ -106,7 +106,7 @@ describe('ReachClient constructor', () => {
 // send()
 // ---------------------------------------------------------------------------
 
-describe('ReachClient.send()', () => {
+describe('ChiClient.send()', () => {
   it('POSTs to /v1/send with a valid envelope', async () => {
     mockFetch.mockResolvedValue(
       jsonResponse({ message_id: 'msg-abc', status: 'pending', router_timestamp: new Date().toISOString() })
@@ -115,7 +115,7 @@ describe('ReachClient.send()', () => {
 
     const result = await client.send({
       to: RECIPIENT_DID,
-      intent: 'INFORM',
+      intent: 'inform.notice',
       content: 'Hello world',
     })
 
@@ -130,8 +130,8 @@ describe('ReachClient.send()', () => {
     // `{ envelope }` is what shipped for six months and 404'd besides.
     const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body as string)
     expect(sentBody.envelope).toBeUndefined()
-    expect(sentBody.chi).toBe('1.0')
-    expect(sentBody.recipient.did).toBe(RECIPIENT_DID)
+    expect(sentBody.version).toBe('1.0')
+    expect(sentBody.recipient_did).toBe(RECIPIENT_DID)
     expect(result.message_id).toBe('msg-abc')
     expect(result.status).toBe('pending')
   })
@@ -142,7 +142,7 @@ describe('ReachClient.send()', () => {
     )
     const client = makeClient()
 
-    await client.send({ to: RECIPIENT_DID, intent: 'INFORM', content: 'Signed!' })
+    await client.send({ to: RECIPIENT_DID, intent: 'inform.notice', content: 'Signed!' })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.signature).toBeTruthy()
@@ -156,7 +156,7 @@ describe('ReachClient.send()', () => {
     )
     const client = makeClient({ private_key: undefined })
 
-    await client.send({ to: RECIPIENT_DID, intent: 'INFORM', content: 'Unsigned' })
+    await client.send({ to: RECIPIENT_DID, intent: 'inform.notice', content: 'Unsigned' })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.signature).toBeUndefined()
@@ -170,12 +170,12 @@ describe('ReachClient.send()', () => {
 
     await client.send({
       to: 'cosmos1recipient000000000000000000000',
-      intent: 'INFORM',
+      intent: 'inform.notice',
       content: 'Raw address recipient',
     })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
-    expect(body.recipient.did).toBe('did:chi:cosmos1recipient000000000000000000000')
+    expect(body.recipient_did).toBe('did:chi:cosmos1recipient000000000000000000000')
   })
 
   it('passes reply_to and priority through to the envelope', async () => {
@@ -186,7 +186,7 @@ describe('ReachClient.send()', () => {
 
     await client.send({
       to: RECIPIENT_DID,
-      intent: 'RESULT',
+      intent: 'result.response',
       content: 'Reply content',
       priority: 3,
       reply_to: 'original-msg-id',
@@ -200,19 +200,19 @@ describe('ReachClient.send()', () => {
   it('throws ConfigError when sender_did is not configured', async () => {
     const client = makeClient({ sender_did: undefined })
     await expect(
-      client.send({ to: RECIPIENT_DID, intent: 'INFORM', content: 'test' })
+      client.send({ to: RECIPIENT_DID, intent: 'inform.notice', content: 'test' })
     ).rejects.toThrow(ConfigError)
   })
 
-  it('throws ReachError PERMISSION_DENIED on 403', async () => {
+  it('throws ChiError PERMISSION_DENIED on 403', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 403, text: async () => 'denied' })
     const client = makeClient()
     await expect(
-      client.send({ to: RECIPIENT_DID, intent: 'INFORM', content: 'blocked' })
-    ).rejects.toThrow(ReachError)
+      client.send({ to: RECIPIENT_DID, intent: 'inform.notice', content: 'blocked' })
+    ).rejects.toThrow(ChiError)
   })
 
-  it('throws ReachError SENDER_BLOCKLISTED on 403 with blocklist body', async () => {
+  it('throws ChiError SENDER_BLOCKLISTED on 403 with blocklist body', async () => {
     mockFetch.mockResolvedValue({
       ok: false,
       status: 403,
@@ -220,26 +220,26 @@ describe('ReachClient.send()', () => {
     })
     const client = makeClient()
 
-    let err: ReachError | undefined
+    let err: ChiError | undefined
     try {
-      await client.send({ to: RECIPIENT_DID, intent: 'INFORM', content: 'blocked' })
+      await client.send({ to: RECIPIENT_DID, intent: 'inform.notice', content: 'blocked' })
     } catch (e) {
-      err = e as ReachError
+      err = e as ChiError
     }
 
-    expect(err).toBeInstanceOf(ReachError)
+    expect(err).toBeInstanceOf(ChiError)
     expect(err!.code).toBe('SENDER_BLOCKLISTED')
   })
 
-  it('throws ReachError RECIPIENT_NOT_FOUND on 404', async () => {
+  it('throws ChiError RECIPIENT_NOT_FOUND on 404', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404, text: async () => 'Not found' })
     const client = makeClient()
 
-    let err: ReachError | undefined
+    let err: ChiError | undefined
     try {
-      await client.send({ to: RECIPIENT_DID, intent: 'INFORM', content: 'test' })
+      await client.send({ to: RECIPIENT_DID, intent: 'inform.notice', content: 'test' })
     } catch (e) {
-      err = e as ReachError
+      err = e as ChiError
     }
 
     expect(err!.code).toBe('RECIPIENT_NOT_FOUND')
@@ -249,7 +249,7 @@ describe('ReachClient.send()', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500, text: async () => 'server error' })
     const client = makeClient()
     await expect(
-      client.send({ to: RECIPIENT_DID, intent: 'INFORM', content: 'test' })
+      client.send({ to: RECIPIENT_DID, intent: 'inform.notice', content: 'test' })
     ).rejects.toThrow(RouterError)
   })
 })
@@ -258,7 +258,7 @@ describe('ReachClient.send()', () => {
 // checkPermission()
 // ---------------------------------------------------------------------------
 
-describe('ReachClient.checkPermission()', () => {
+describe('ChiClient.checkPermission()', () => {
   const ALLOWED: PermissionResult = {
     allowed: true,
     allowed_channels: ['email', 'push'],
@@ -277,7 +277,7 @@ describe('ReachClient.checkPermission()', () => {
 
     const result = await client.checkPermission({
       recipient: RECIPIENT_DID,
-      intent: 'INFORM',
+      intent: 'inform.notice',
     })
 
     expect(result.allowed).toBe(true)
@@ -290,7 +290,7 @@ describe('ReachClient.checkPermission()', () => {
 
     const result = await client.checkPermission({
       recipient: RECIPIENT_DID,
-      intent: 'COLLECT',
+      intent: 'collect.survey',
     })
 
     expect(result.allowed).toBe(false)
@@ -301,19 +301,19 @@ describe('ReachClient.checkPermission()', () => {
     mockFetch.mockResolvedValue(jsonResponse(ALLOWED))
     const client = makeClient({ sender_type: 'LM' })
 
-    await client.checkPermission({ recipient: RECIPIENT_DID, intent: 'AUTHORIZE' })
+    await client.checkPermission({ recipient: RECIPIENT_DID, intent: 'authorize.payment' })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.sender_did).toBe(SENDER_DID)
     expect(body.sender_type).toBe('LM')
-    expect(body.intent).toBe('AUTHORIZE')
+    expect(body.intent).toBe('authorize.payment')
   })
 
   it('defaults sender_type to US when not configured', async () => {
     mockFetch.mockResolvedValue(jsonResponse(ALLOWED))
     const client = makeClient({ sender_type: undefined })
 
-    await client.checkPermission({ recipient: RECIPIENT_DID, intent: 'INFORM' })
+    await client.checkPermission({ recipient: RECIPIENT_DID, intent: 'inform.notice' })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.sender_type).toBe('US')
@@ -322,7 +322,7 @@ describe('ReachClient.checkPermission()', () => {
   it('throws ConfigError when sender_did is not set', async () => {
     const client = makeClient({ sender_did: undefined })
     await expect(
-      client.checkPermission({ recipient: RECIPIENT_DID, intent: 'INFORM' })
+      client.checkPermission({ recipient: RECIPIENT_DID, intent: 'inform.notice' })
     ).rejects.toThrow(ConfigError)
   })
 })
@@ -331,7 +331,7 @@ describe('ReachClient.checkPermission()', () => {
 // getStatus()
 // ---------------------------------------------------------------------------
 
-describe('ReachClient.getStatus()', () => {
+describe('ChiClient.getStatus()', () => {
   it('GETs the correct status endpoint', async () => {
     mockFetch.mockResolvedValue(jsonResponse(ack('delivered')))
     const client = makeClient()
@@ -361,12 +361,12 @@ describe('ReachClient.getStatus()', () => {
   it('throws RouterError on 404', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404, text: async () => 'not found' })
     const client = makeClient()
-    await expect(client.getStatus('unknown')).rejects.toThrow(ReachError)
+    await expect(client.getStatus('unknown')).rejects.toThrow(ChiError)
   })
 
-  it('throws ReachError for empty message_id', async () => {
+  it('throws ChiError for empty message_id', async () => {
     const client = makeClient()
-    await expect(client.getStatus('')).rejects.toThrow(ReachError)
+    await expect(client.getStatus('')).rejects.toThrow(ChiError)
   })
 })
 
@@ -374,7 +374,7 @@ describe('ReachClient.getStatus()', () => {
 // waitForAck()
 // ---------------------------------------------------------------------------
 
-describe('ReachClient.waitForAck()', () => {
+describe('ChiClient.waitForAck()', () => {
   it('returns immediately when status is already terminal', async () => {
     mockFetch.mockResolvedValue(jsonResponse(ack('delivered')))
     const client = makeClient()

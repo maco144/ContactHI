@@ -157,6 +157,7 @@ export async function submitMessage(message: ChiEnvelope): Promise<void> {
     message.created_at,
     expiresAt,
     config.node_id,
+    message.reply_to ?? '',
   ]);
 }
 

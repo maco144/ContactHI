@@ -13,6 +13,7 @@ export interface ChiEnvelope {
   payload_type: string;
   payload: unknown;
   created_at: number;    // Unix ms
+  reply_to?: string;     // message_id being responded to (spec §9.3)
   signature?: string;    // optional in v1
 }
 

@@ -1,5 +1,5 @@
 /**
- * CHI/1.0 Protocol — ReachClient
+ * CHI/1.0 Protocol — ChiClient
  *
  * Main entry point for the SDK. Handles:
  *   - Composing, signing, and sending message envelopes to a router node
@@ -23,7 +23,7 @@ import { createEnvelope, signEnvelope } from './envelope'
 import { PreferencesManager } from './preferences'
 import { createDID } from './did'
 import {
-  ReachError,
+  ChiError,
   RouterError,
   ConfigError,
   TimeoutError,
@@ -47,7 +47,7 @@ const TERMINAL_STATUSES = new Set<MessageStatus>([
   'failed',
 ])
 
-export class ReachClient {
+export class ChiClient {
   private readonly config: ReachClientConfig
   private readonly base_url: string
 
@@ -211,7 +211,7 @@ export class ReachClient {
    */
   async getStatus(message_id: string): Promise<DeliveryAck> {
     if (!message_id) {
-      throw new ReachError('INVALID_ENVELOPE', 'message_id is required')
+      throw new ChiError('INVALID_ENVELOPE', 'message_id is required')
     }
 
     // protocol-spec.md §11: GET /v1/status/{message_id}
@@ -252,21 +252,21 @@ export class ReachClient {
     // Map router HTTP error codes to typed ReachErrors where possible
     if (status === 403) {
       if (body.includes('blocklist') || body.includes('BLOCKLISTED')) {
-        throw new ReachError('SENDER_BLOCKLISTED', body)
+        throw new ChiError('SENDER_BLOCKLISTED', body)
       }
       if (body.includes('rate_limit') || body.includes('RATE_LIMIT')) {
-        throw new ReachError('RATE_LIMIT_EXCEEDED', body)
+        throw new ChiError('RATE_LIMIT_EXCEEDED', body)
       }
-      throw new ReachError('PERMISSION_DENIED', body)
+      throw new ChiError('PERMISSION_DENIED', body)
     }
     if (status === 404) {
-      throw new ReachError('RECIPIENT_NOT_FOUND', `Recipient not found: ${body}`)
+      throw new ChiError('RECIPIENT_NOT_FOUND', `Recipient not found: ${body}`)
     }
     if (status === 400) {
-      throw new ReachError('INVALID_ENVELOPE', body)
+      throw new ChiError('INVALID_ENVELOPE', body)
     }
     if (status === 401 || body.includes('SIGNATURE_INVALID')) {
-      throw new ReachError('SIGNATURE_INVALID', body)
+      throw new ChiError('SIGNATURE_INVALID', body)
     }
     throw new RouterError(status, body)
   }

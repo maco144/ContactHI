@@ -10,7 +10,7 @@
 
 import { CosmWasmClient } from '@cosmjs/cosmwasm-stargate'
 import type { HumanPreferences, ChainPreferencesResponse } from './types'
-import { ReachError } from './errors'
+import { ChiError } from './errors'
 
 const DID_METHOD = 'chi'
 const DID_PREFIX = `did:${DID_METHOD}:`
@@ -27,7 +27,7 @@ const DID_PREFIX = `did:${DID_METHOD}:`
  */
 export function createDID(cosmos_address: string): string {
   if (!cosmos_address || typeof cosmos_address !== 'string') {
-    throw new ReachError('INVALID_ENVELOPE', 'cosmos_address must be a non-empty string')
+    throw new ChiError('INVALID_ENVELOPE', 'cosmos_address must be a non-empty string')
   }
   const trimmed = cosmos_address.trim()
   // If it's already a full DID, return as-is
@@ -40,21 +40,21 @@ export function createDID(cosmos_address: string): string {
 /**
  * Parse a did:chi: DID into its components.
  *
- * @throws ReachError('INVALID_ENVELOPE') if the DID is malformed
+ * @throws ChiError('INVALID_ENVELOPE') if the DID is malformed
  */
 export function parseDID(did: string): { method: string; address: string } {
   if (!did || typeof did !== 'string') {
-    throw new ReachError('INVALID_ENVELOPE', 'DID must be a non-empty string')
+    throw new ChiError('INVALID_ENVELOPE', 'DID must be a non-empty string')
   }
   if (!did.startsWith(DID_PREFIX)) {
-    throw new ReachError(
+    throw new ChiError(
       'INVALID_ENVELOPE',
       `DID must start with "${DID_PREFIX}", got: ${did}`
     )
   }
   const address = did.slice(DID_PREFIX.length)
   if (!address) {
-    throw new ReachError('INVALID_ENVELOPE', `DID has no address component: ${did}`)
+    throw new ChiError('INVALID_ENVELOPE', `DID has no address component: ${did}`)
   }
   return { method: DID_METHOD, address }
 }
@@ -106,7 +106,7 @@ export async function resolveDID(
   try {
     client = await CosmWasmClient.connect(cosmos_rpc)
   } catch (err) {
-    throw new ReachError(
+    throw new ChiError(
       'ROUTER_ERROR',
       `Failed to connect to Cosmos RPC at ${cosmos_rpc}: ${String(err)}`
     )
@@ -127,7 +127,7 @@ export async function resolveDID(
     ) {
       return null
     }
-    throw new ReachError(
+    throw new ChiError(
       'ROUTER_ERROR',
       `Failed to query preferences for ${address}: ${msg}`
     )
@@ -148,11 +148,15 @@ function chainResponseToPreferences(
   did: string,
   chain: ChainPreferencesResponse
 ): HumanPreferences {
+  // `HumanPreferences` mirrors the contract's `PreferencesResponse` exactly, so
+  // there is nothing left to reshape — `did` is kept only for the caller's
+  // convenience when the profile was looked up by DID rather than address.
+  void did
   return {
-    did,
+    owner: chain.owner,
     rules: chain.rules,
     default_policy: chain.default_policy,
-    webhook_url: chain.webhook_url ?? undefined,
-    updated_at: new Date(chain.updated_at * 1000).toISOString(),
+    webhook_url: chain.webhook_url ?? null,
+    updated_at: chain.updated_at,
   }
 }

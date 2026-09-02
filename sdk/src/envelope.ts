@@ -11,7 +11,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import * as ed from '@noble/ed25519'
 import type {
-  ReachMessage,
+  ChiEnvelope,
   EntityType,
   Intent,
   PayloadType,
@@ -74,7 +74,7 @@ function sortKeys(value: unknown): unknown {
  * with all keys sorted alphabetically at every nesting level, with the
  * `signature` field omitted.
  */
-function canonicalJSON(envelope: ReachMessage): string {
+function canonicalJSON(envelope: ChiEnvelope): string {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { signature: _sig, ...withoutSig } = envelope
   return JSON.stringify(sortKeys(withoutSig))
@@ -93,55 +93,51 @@ export function createEnvelope(params: {
   sender_type: EntityType
   recipient_did: string
   intent: Intent
-  content: string
+  /** Message body. A string is sent as-is; anything else is sent structured. */
+  content: unknown
   payload_type?: PayloadType
   priority?: Priority
   ttl?: number
   reply_to?: string
-  mime_type?: string
-  transcript?: string
-}): ReachMessage {
+}): ChiEnvelope {
   const {
     sender_did,
     sender_type,
     recipient_did,
     intent,
     content,
-    payload_type = 'text',
-    priority = 1,
-    ttl = 86400,  // 24 hours default
+    priority = 128,
+    ttl = 86400, // 24 hours default
     reply_to,
-    mime_type,
-    transcript,
   } = params
+
+  const payload_type =
+    params.payload_type ?? (typeof content === 'string' ? 'text/plain' : 'application/json')
 
   if (!sender_did) throw new InvalidEnvelopeError('sender_did is required', 'sender_did')
   if (!sender_type) throw new InvalidEnvelopeError('sender_type is required', 'sender_type')
   if (!recipient_did) throw new InvalidEnvelopeError('recipient_did is required', 'recipient_did')
   if (!intent) throw new InvalidEnvelopeError('intent is required', 'intent')
-  if (!content) throw new InvalidEnvelopeError('content is required', 'payload.content')
-  if (ttl <= 0) throw new InvalidEnvelopeError('ttl must be a positive integer', 'ttl')
+  if (content === undefined || content === null || content === '') {
+    throw new InvalidEnvelopeError('content is required', 'payload')
+  }
+  if (ttl <= 0) throw new InvalidEnvelopeError('ttl must be a positive integer', 'ttl_seconds')
+  if (priority < 0 || priority > 255) {
+    throw new InvalidEnvelopeError('priority must be between 0 and 255', 'priority')
+  }
 
-  const envelope: ReachMessage = {
-    chi: '1.0',
-    id: uuidv4(),
-    sender: {
-      did: sender_did,
-      type: sender_type,
-    },
-    recipient: {
-      did: recipient_did,
-    },
+  const envelope: ChiEnvelope = {
+    version: '1.0',
+    message_id: uuidv4(),
+    sender_did,
+    sender_type,
+    recipient_did,
     intent,
     priority,
-    ttl,
-    payload: {
-      type: payload_type,
-      content,
-      ...(transcript !== undefined && { transcript }),
-      ...(mime_type !== undefined && { mime_type }),
-    },
-    created_at: new Date().toISOString(),
+    ttl_seconds: ttl,
+    payload_type,
+    payload: content,
+    created_at: Date.now(),
     ...(reply_to !== undefined && { reply_to }),
   }
 
@@ -162,9 +158,9 @@ export function createEnvelope(params: {
  * @throws SignatureError if the key is invalid
  */
 export async function signEnvelope(
-  envelope: ReachMessage,
+  envelope: ChiEnvelope,
   private_key: string
-): Promise<ReachMessage> {
+): Promise<ChiEnvelope> {
   let privKeyBytes: Uint8Array
   try {
     privKeyBytes = hexToBytes(private_key)
@@ -210,7 +206,7 @@ export async function signEnvelope(
  * @returns true if the signature is valid, false otherwise
  */
 export async function verifyEnvelope(
-  envelope: ReachMessage,
+  envelope: ChiEnvelope,
   public_key?: string
 ): Promise<boolean> {
   if (!envelope.signature) {
@@ -256,59 +252,67 @@ export async function verifyEnvelope(
 // Validate
 // ---------------------------------------------------------------------------
 
+// These mirror the router's `validate.ts` and the contract's enums. If SDK-side
+// validation and router-side validation disagree, the SDK's job — telling you
+// before you spend a round trip — is worthless.
 const VALID_ENTITY_TYPES = new Set([
-  'CA', 'LM', 'GN', 'AA', 'RB', 'DR', 'VH', 'US', 'CP', 'HS', '*',
+  'CA', 'LM', 'GN', 'AA', 'RB', 'DR', 'VH', 'US', 'CP', 'HS',
 ])
-const VALID_INTENTS = new Set(['INFORM', 'COLLECT', 'AUTHORIZE', 'ESCALATE', 'RESULT'])
-const VALID_PAYLOAD_TYPES = new Set(['text', 'voice', 'document', 'structured'])
-const VALID_PRIORITIES = new Set([0, 1, 2, 3])
+const VALID_INTENT_NAMESPACES = new Set([
+  'inform', 'collect', 'authorize', 'escalate', 'result',
+])
+const INTENT_PATTERN = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/
+const MAX_TTL_SECONDS = 604_800 // 7 days
 
 /**
- * Type guard: validate that an unknown value is a structurally valid ReachMessage.
+ * Type guard: validate that an unknown value is a structurally valid ChiEnvelope.
  *
  * This checks all required fields are present with correct types and values.
  * It does NOT verify the cryptographic signature.
  */
-export function validateEnvelope(envelope: unknown): envelope is ReachMessage {
+export function validateEnvelope(envelope: unknown): envelope is ChiEnvelope {
   if (typeof envelope !== 'object' || envelope === null) return false
 
   const msg = envelope as Record<string, unknown>
 
   // Protocol version
-  if (msg['chi'] !== '1.0') return false
+  if (msg['version'] !== '1.0') return false
 
-  // ID
-  if (typeof msg['id'] !== 'string' || !msg['id']) return false
+  // Identifiers
+  if (typeof msg['message_id'] !== 'string' || !msg['message_id']) return false
+  if (typeof msg['sender_did'] !== 'string' || !msg['sender_did']) return false
+  if (typeof msg['recipient_did'] !== 'string' || !msg['recipient_did']) return false
+  if (!(msg['sender_did'] as string).startsWith('did:')) return false
+  if (!(msg['recipient_did'] as string).startsWith('did:')) return false
 
-  // Sender
-  if (typeof msg['sender'] !== 'object' || msg['sender'] === null) return false
-  const sender = msg['sender'] as Record<string, unknown>
-  if (typeof sender['did'] !== 'string' || !sender['did']) return false
-  if (!VALID_ENTITY_TYPES.has(sender['type'] as string)) return false
+  // Sender entity type
+  if (!VALID_ENTITY_TYPES.has(msg['sender_type'] as string)) return false
 
-  // Recipient
-  if (typeof msg['recipient'] !== 'object' || msg['recipient'] === null) return false
-  const recipient = msg['recipient'] as Record<string, unknown>
-  if (typeof recipient['did'] !== 'string' || !recipient['did']) return false
+  // Intent: `class.action`, where the class is one the registry can match
+  const intent = msg['intent']
+  if (typeof intent !== 'string' || !INTENT_PATTERN.test(intent)) return false
+  if (!VALID_INTENT_NAMESPACES.has(intent.split('.')[0])) return false
 
-  // Intent
-  if (!VALID_INTENTS.has(msg['intent'] as string)) return false
-
-  // Priority
-  if (!VALID_PRIORITIES.has(msg['priority'] as number)) return false
+  // Priority — optional, 0–255
+  if (msg['priority'] !== undefined) {
+    const priority = msg['priority']
+    if (typeof priority !== 'number' || !Number.isInteger(priority)) return false
+    if (priority < 0 || priority > 255) return false
+  }
 
   // TTL
-  if (typeof msg['ttl'] !== 'number' || msg['ttl'] <= 0) return false
+  const ttl = msg['ttl_seconds']
+  if (typeof ttl !== 'number' || !Number.isInteger(ttl)) return false
+  if (ttl < 1 || ttl > MAX_TTL_SECONDS) return false
 
   // Payload
-  if (typeof msg['payload'] !== 'object' || msg['payload'] === null) return false
-  const payload = msg['payload'] as Record<string, unknown>
-  if (!VALID_PAYLOAD_TYPES.has(payload['type'] as string)) return false
-  if (typeof payload['content'] !== 'string') return false
+  if (typeof msg['payload_type'] !== 'string' || !msg['payload_type']) return false
+  if (msg['payload'] === undefined || msg['payload'] === null) return false
 
-  // created_at — must be ISO 8601
-  if (typeof msg['created_at'] !== 'string') return false
-  if (isNaN(Date.parse(msg['created_at'] as string))) return false
+  // created_at — Unix milliseconds
+  if (typeof msg['created_at'] !== 'number' || !Number.isFinite(msg['created_at'])) {
+    return false
+  }
 
   // Optional fields — type-check when present
   if (msg['reply_to'] !== undefined && typeof msg['reply_to'] !== 'string') return false
@@ -320,10 +324,10 @@ export function validateEnvelope(envelope: unknown): envelope is ReachMessage {
 /**
  * Check whether a CHI message envelope is expired (TTL elapsed).
  */
-export function isExpired(envelope: ReachMessage): boolean {
-  const created = Date.parse(envelope.created_at)
-  if (isNaN(created)) return true
-  return Date.now() > created + envelope.ttl * 1000
+export function isExpired(envelope: ChiEnvelope): boolean {
+  const created = envelope.created_at
+  if (typeof created !== 'number' || Number.isNaN(created)) return true
+  return Date.now() > created + envelope.ttl_seconds * 1000
 }
 
 // ---------------------------------------------------------------------------

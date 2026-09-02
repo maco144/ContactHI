@@ -1,41 +1,84 @@
 /**
  * CHI/1.0 Protocol — Core Type Definitions
  *
- * Entity type codes match the on-chain registry exactly.
- * See: tools/contacthi-contracts/src/msg.rs
+ * The vocabulary here mirrors `contracts/src/state.rs` exactly, because the
+ * on-chain registry is the consent boundary: it is the only party that decides
+ * whether a message may be delivered, and its serialization is frozen once a
+ * registry is instantiated. Verified against `contracts/schema/raw/query.json`.
  */
 
-/** Entity type codes per the ContactHI entity taxonomy */
+/**
+ * Entity Identity type codes. Matches `EntityType` in the registry contract
+ * and protocol-spec.md §4.3.
+ */
 export type EntityType =
-  | 'CA'  // Corporate Agent
+  | 'CA'  // Conversational Agent
   | 'LM'  // Language Model
-  | 'GN'  // Governance Node
+  | 'GN'  // Generative Model
   | 'AA'  // Autonomous Agent
   | 'RB'  // Robot
-  | 'DR'  // Data Reporter
-  | 'VH'  // Virtual Human
-  | 'US'  // User (human)
-  | 'CP'  // Counterparty
-  | 'HS'  // Human Sender (generic)
-  | '*'   // Wildcard — matches any entity type in rules
+  | 'DR'  // Drone
+  | 'VH'  // Vehicle
+  | 'US'  // Human User
+  | 'CP'  // Copilot
+  | 'HS'  // Hive / Swarm
+  | 'any' // Wildcard — matches any entity type in rules
 
-/** Message intent classifies the purpose of communication */
-export type Intent = 'INFORM' | 'COLLECT' | 'AUTHORIZE' | 'ESCALATE' | 'RESULT'
+/**
+ * The coarse intent class the registry stores and matches rules against.
+ * Matches `Intent` in the registry contract.
+ */
+export type IntentClass =
+  | 'inform'
+  | 'collect'
+  | 'authorize'
+  | 'escalate'
+  | 'result'
+  | 'any'
+
+/**
+ * The intent carried on the wire: `class.action`, e.g. `inform.shipping_update`.
+ *
+ * The namespace before the dot IS the registry's intent class, which is how a
+ * granular envelope intent resolves to a coarse on-chain rule. The template
+ * type makes a namespace the registry cannot match a compile error rather than
+ * a 400 at the router.
+ */
+export type Intent = `${Exclude<IntentClass, 'any'>}.${string}`
+
+/** Extract the registry intent class from a wire intent. */
+export function intentClass(intent: string): IntentClass {
+  const namespace = intent.split('.')[0]?.toLowerCase() ?? ''
+  return (
+    ['inform', 'collect', 'authorize', 'escalate', 'result'].includes(namespace)
+      ? namespace
+      : 'any'
+  ) as IntentClass
+}
 
 /** Delivery channels the protocol supports */
 export type Channel = 'push' | 'sms' | 'email' | 'webhook' | 'in-app' | 'agent-inbox'
 
 /**
- * Message priority level.
- * 0 = low, 1 = normal, 2 = high, 3 = urgent
+ * Message priority, 0–255; higher is more urgent. Defaults to 128.
+ * (The router validates this range; the registry does not use it.)
  */
-export type Priority = 0 | 1 | 2 | 3
+export type Priority = number
 
-/** Payload encoding type */
-export type PayloadType = 'text' | 'voice' | 'document' | 'structured'
+/**
+ * MIME-like payload descriptor, e.g. `text/plain`, `application/json`.
+ * Free-form so payload formats can be added without a protocol revision.
+ */
+export type PayloadType = string
 
 /** Lifecycle status of a sent message */
-export type MessageStatus = 'pending' | 'delivered' | 'read' | 'responded' | 'expired' | 'failed'
+export type MessageStatus =
+  | 'pending'
+  | 'delivered'
+  | 'read'
+  | 'responded'
+  | 'expired'
+  | 'failed'
 
 /** Rate-limit period specifiers */
 export type RateLimitPeriod = 'hour' | 'day' | 'week'
@@ -45,90 +88,82 @@ export type RateLimitPeriod = 'hour' | 'day' | 'week'
 // ---------------------------------------------------------------------------
 
 /**
- * A CHI/1.0 message envelope. This is the canonical wire format.
- * All fields except `signature` and `sender.proof` must be present before signing.
+ * A CHI/1.0 message envelope — the canonical wire format (protocol-spec.md §6.1).
+ *
+ * Flat by design: it maps 1:1 onto the router's validation, the SpacetimeDB
+ * `messages` table, and the ack record, with no reshaping at any hop.
+ * All fields except `signature` must be present before signing.
  */
-export interface ReachMessage {
+export interface ChiEnvelope {
   /** Protocol version — always "1.0" */
-  chi: '1.0'
+  version: '1.0'
   /** Unique message identifier (UUID v4) */
-  id: string
-  sender: {
-    /** Sender's DID in did:chi: format */
-    did: string
-    /** Sender entity type */
-    type: EntityType
-    /** ZK proof hex — optional for v1, required for proof-gated recipients */
-    proof?: string
-  }
-  recipient: {
-    /** Recipient's DID in did:chi: format */
-    did: string
-  }
-  /** Purpose of this message */
+  message_id: string
+  /** Sender's DID, `did:chi:<address>` */
+  sender_did: string
+  /** Sender's Entity Identity code */
+  sender_type: EntityType
+  /** Recipient's DID, `did:chi:<address>` */
+  recipient_did: string
+  /** Purpose of this message, `class.action` */
   intent: Intent
-  /** Delivery priority */
-  priority: Priority
-  /** Time-to-live in seconds. Message is invalid after created_at + ttl. */
-  ttl: number
-  payload: {
-    /** Encoding/format of the content field */
-    type: PayloadType
-    /** The actual message body */
-    content: string
-    /** Optional transcript (for voice payloads) */
-    transcript?: string
-    /** MIME type when type is 'document' */
-    mime_type?: string
-  }
-  /** ID of the message this is a reply to, if any */
+  /** Delivery priority, 0–255 (default 128) */
+  priority?: Priority
+  /** Time-to-live in seconds. Invalid after `created_at + ttl_seconds * 1000`. */
+  ttl_seconds: number
+  /** MIME-like descriptor for `payload` */
+  payload_type: PayloadType
+  /** The message body */
+  payload: unknown
+  /** Creation time, Unix milliseconds */
+  created_at: number
+  /** `message_id` this is a response to — see protocol-spec.md §9.3 */
   reply_to?: string
-  /** ISO 8601 creation timestamp */
-  created_at: string
-  /** ed25519 signature over canonical JSON, hex-encoded */
+  /** ed25519 signature over canonical JSON, hex-encoded. Optional in CHI/1.0. */
   signature?: string
 }
 
+/** @deprecated Renamed to {@link ChiEnvelope}. Kept so existing imports compile. */
+export type ReachMessage = ChiEnvelope
+
 // ---------------------------------------------------------------------------
-// Preferences
+// Preferences — mirrors contracts/src/state.rs
 // ---------------------------------------------------------------------------
 
 /** A single rule governing which senders may contact the recipient */
 export interface PreferenceRule {
-  /** Entity type this rule applies to ('*' for any) */
+  /** Entity type this rule applies to (`'any'` for all) */
   sender_type: EntityType
-  /** Intent this rule applies to ('*' for any) */
-  intent: Intent | '*'
+  /** Intent class this rule applies to (`'any'` for all) */
+  intent: IntentClass
   /** Which channels are permitted when this rule matches */
   allowed_channels: Channel[]
   /** Optional rate limiting */
   rate_limit?: {
     count: number
     period: RateLimitPeriod
-  }
-  /** Optional delivery time window (UTC) */
+  } | null
+  /** Optional delivery time window (UTC), "HH:MM" */
   time_window?: {
-    /** "HH:MM" format, UTC */
     start: string
-    /** "HH:MM" format, UTC */
     end: string
-  }
-  /** DID or domain patterns that are always blocked (overrides allow) */
+  } | null
+  /** DID or domain patterns denied even when this rule would otherwise match */
   blocklist?: string[]
 }
 
-/** Full on-chain preference profile for a DID */
+/** Full on-chain preference profile, as `PreferencesResponse` returns it */
 export interface HumanPreferences {
-  /** Owner's DID */
-  did: string
-  /** Ordered list of preference rules (first match wins) */
+  /** Owner's bech32 address */
+  owner: string
+  /** Preference rules, evaluated most-specific-first on-chain */
   rules: PreferenceRule[]
   /** What to do when no rule matches */
   default_policy: 'block' | 'allow'
   /** HTTPS URL to receive webhook deliveries */
-  webhook_url?: string
-  /** ISO 8601 timestamp of last update */
-  updated_at: string
+  webhook_url?: string | null
+  /** Unix seconds of last update */
+  updated_at: number
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +176,7 @@ export interface PermissionResult {
   allowed: boolean
   /** Which channels are permitted (empty if denied) */
   allowed_channels: Channel[]
-  /** Human-readable explanation (present when denied or rate-limited) */
+  /** Machine or human-readable explanation */
   reason?: string
   /** Remaining sends allowed in the current rate-limit window */
   rate_limit_remaining?: number
@@ -169,11 +204,11 @@ export interface DeliveryAck {
 // Client configuration
 // ---------------------------------------------------------------------------
 
-/** Configuration for a ReachClient instance */
-export interface ReachClientConfig {
-  /** URL of a CHI router node (e.g. "https://router.chi.network") */
+/** Configuration for a ChiClient instance */
+export interface ChiClientConfig {
+  /** URL of a CHI router node (e.g. "https://chi.delivery") */
   router_url: string
-  /** Cosmos RPC endpoint for on-chain queries (e.g. "https://rpc.cosmos.network") */
+  /** Cosmos RPC endpoint for on-chain queries */
   cosmos_rpc?: string
   /** CosmWasm contract address of the preference registry */
   registry_address?: string
@@ -185,23 +220,21 @@ export interface ReachClientConfig {
   private_key?: string
 }
 
+/** @deprecated Renamed to {@link ChiClientConfig}. */
+export type ReachClientConfig = ChiClientConfig
+
 // ---------------------------------------------------------------------------
 // Router API shapes (internal)
 // ---------------------------------------------------------------------------
-
-/** POST /v1/send — request body (the bare envelope) */
-export interface RouterSendRequest {
-  envelope: ReachMessage
-}
 
 /** POST /v1/send — response body */
 export interface RouterSendResponse {
   message_id: string
   status: MessageStatus
-  router_timestamp: string
+  channel?: Channel
 }
 
-/** GET /v1/status/:message_id — response body (protocol-spec.md §11) */
+/** GET /v1/status/:message_id — response body (protocol-spec.md §7.3) */
 export interface RouterStatusResponse {
   message_id: string
   status: MessageStatus
@@ -229,33 +262,14 @@ export interface RouterPermissionResponse {
 }
 
 // ---------------------------------------------------------------------------
-// On-chain query shapes (mirrors msg.rs response structs)
+// On-chain query shapes (mirror msg.rs response structs)
 // ---------------------------------------------------------------------------
 
 /** CosmWasm query response for GetPreferences */
-export interface ChainPreferencesResponse {
-  owner: string
-  rules: ChainPreferenceRule[]
-  default_policy: 'block' | 'allow'
-  webhook_url: string | null
-  updated_at: number  // unix seconds (u64 from chain)
-}
+export type ChainPreferencesResponse = HumanPreferences
 
-/** On-chain preference rule (snake_case from CosmWasm) */
-export interface ChainPreferenceRule {
-  sender_type: EntityType
-  intent: Intent | '*'
-  allowed_channels: Channel[]
-  rate_limit?: {
-    count: number
-    period: RateLimitPeriod
-  }
-  time_window?: {
-    start: string
-    end: string
-  }
-  blocklist?: string[]
-}
+/** On-chain preference rule */
+export type ChainPreferenceRule = PreferenceRule
 
 /** CosmWasm query response for CheckPermission */
 export interface ChainPermissionResponse {

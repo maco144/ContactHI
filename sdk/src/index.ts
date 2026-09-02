@@ -5,9 +5,9 @@
  *
  * Quick start:
  *
- *   import { ReachClient } from '@contacthi/sdk'
+ *   import { ChiClient } from '@contacthi/sdk'
  *
- *   const client = new ReachClient({
+ *   const client = new ChiClient({
  *     router_url: 'https://router.chi.network',
  *     sender_did: 'did:chi:cosmos1youraddress',
  *     sender_type: 'AA',
@@ -16,13 +16,13 @@
  *
  *   const { message_id } = await client.send({
  *     to: 'did:chi:cosmos1recipientaddress',
- *     intent: 'INFORM',
+ *     intent: 'inform.shipping_update',
  *     content: 'Your order has shipped.',
  *   })
  */
 
 // Main client
-export { ReachClient } from './client'
+export { ChiClient } from './client'
 
 // Preferences manager (also accessible as client.preferences)
 export { PreferencesManager } from './preferences'
@@ -47,7 +47,7 @@ export {
 
 // Error classes
 export {
-  ReachError,
+  ChiError,
   InvalidEnvelopeError,
   SignatureError,
   RouterError,
@@ -60,13 +60,14 @@ export type {
   // Domain types
   EntityType,
   Intent,
+  IntentClass,
   Channel,
   Priority,
   PayloadType,
   MessageStatus,
   RateLimitPeriod,
   // Core message
-  ReachMessage,
+  ChiEnvelope,
   // Preferences
   PreferenceRule,
   HumanPreferences,
@@ -74,7 +75,25 @@ export type {
   PermissionResult,
   DeliveryAck,
   // Config
-  ReachClientConfig,
+  ChiClientConfig,
 } from './types'
 
-export type { ReachErrorCode, ReachErrorCode as ErrorCode } from './errors'
+export { intentClass } from './types'
+
+export type { ChiErrorCode, ChiErrorCode as ErrorCode } from './errors'
+
+// ---------------------------------------------------------------------------
+// Deprecated aliases
+//
+// The project was renamed Reach → CHI before 1.0 and the SDK identifiers were
+// never carried across. These keep existing imports compiling; they will be
+// removed in CHI/1.1.
+// ---------------------------------------------------------------------------
+
+export { ChiClient as ReachClient } from './client'
+export { ChiError as ReachError } from './errors'
+export type { ChiErrorCode as ReachErrorCode } from './errors'
+export type {
+  ChiEnvelope as ReachMessage,
+  ChiClientConfig as ReachClientConfig,
+} from './types'

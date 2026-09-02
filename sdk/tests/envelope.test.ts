@@ -15,7 +15,7 @@ import {
   hexToBytes,
   bytesToHex,
 } from '../src/envelope'
-import type { ReachMessage } from '../src/types'
+import type { ChiEnvelope } from '../src/types'
 import { InvalidEnvelopeError, SignatureError } from '../src/errors'
 
 // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ function makeBaseParams() {
     sender_did: SENDER_DID,
     sender_type: 'AA' as const,
     recipient_did: RECIPIENT_DID,
-    intent: 'INFORM' as const,
+    intent: 'inform.notice' as const,
     content: 'Hello from an agent.',
   }
 }
@@ -43,50 +43,50 @@ function makeBaseParams() {
 // ---------------------------------------------------------------------------
 
 describe('createEnvelope', () => {
-  it('returns a valid ReachMessage with protocol version 1.0', () => {
+  it('returns a valid ChiEnvelope with protocol version 1.0', () => {
     const env = createEnvelope(makeBaseParams())
-    expect(env.chi).toBe('1.0')
+    expect(env.version).toBe('1.0')
   })
 
   it('generates a unique UUID id for each call', () => {
     const a = createEnvelope(makeBaseParams())
     const b = createEnvelope(makeBaseParams())
-    expect(a.id).toBeTruthy()
-    expect(b.id).toBeTruthy()
-    expect(a.id).not.toBe(b.id)
+    expect(a.message_id).toBeTruthy()
+    expect(b.message_id).toBeTruthy()
+    expect(a.message_id).not.toBe(b.message_id)
   })
 
   it('sets sender fields correctly', () => {
     const env = createEnvelope(makeBaseParams())
-    expect(env.sender.did).toBe(SENDER_DID)
-    expect(env.sender.type).toBe('AA')
+    expect(env.sender_did).toBe(SENDER_DID)
+    expect(env.sender_type).toBe('AA')
   })
 
   it('sets recipient did', () => {
     const env = createEnvelope(makeBaseParams())
-    expect(env.recipient.did).toBe(RECIPIENT_DID)
+    expect(env.recipient_did).toBe(RECIPIENT_DID)
   })
 
-  it('applies default priority 1 and default ttl 86400', () => {
+  it('applies default priority 128 and default ttl 86400', () => {
     const env = createEnvelope(makeBaseParams())
-    expect(env.priority).toBe(1)
-    expect(env.ttl).toBe(86400)
+    expect(env.priority).toBe(128)
+    expect(env.ttl_seconds).toBe(86400)
   })
 
   it('respects explicit priority and ttl overrides', () => {
     const env = createEnvelope({ ...makeBaseParams(), priority: 3, ttl: 3600 })
     expect(env.priority).toBe(3)
-    expect(env.ttl).toBe(3600)
+    expect(env.ttl_seconds).toBe(3600)
   })
 
-  it('defaults payload_type to text', () => {
+  it('defaults payload_type to text/plain for string content', () => {
     const env = createEnvelope(makeBaseParams())
-    expect(env.payload.type).toBe('text')
+    expect(env.payload_type).toBe('text/plain')
   })
 
   it('sets payload_type when provided', () => {
     const env = createEnvelope({ ...makeBaseParams(), payload_type: 'structured' })
-    expect(env.payload.type).toBe('structured')
+    expect(env.payload_type).toBe('structured')
   })
 
   it('sets reply_to when provided', () => {
@@ -99,13 +99,13 @@ describe('createEnvelope', () => {
     expect(env.reply_to).toBeUndefined()
   })
 
-  it('sets created_at as a valid ISO 8601 string', () => {
+  it('sets created_at as Unix milliseconds', () => {
     const before = Date.now()
     const env = createEnvelope(makeBaseParams())
     const after = Date.now()
-    const ts = Date.parse(env.created_at)
-    expect(ts).toBeGreaterThanOrEqual(before)
-    expect(ts).toBeLessThanOrEqual(after)
+    expect(typeof env.created_at).toBe('number')
+    expect(env.created_at).toBeGreaterThanOrEqual(before)
+    expect(env.created_at).toBeLessThanOrEqual(after)
   })
 
   it('does not set signature on fresh envelope', () => {
@@ -141,22 +141,29 @@ describe('createEnvelope', () => {
     ).toThrow(InvalidEnvelopeError)
   })
 
-  it('includes mime_type in payload when provided', () => {
+  it('carries the MIME type in payload_type', () => {
     const env = createEnvelope({
       ...makeBaseParams(),
-      payload_type: 'document',
-      mime_type: 'application/pdf',
+      payload_type: 'application/pdf',
     })
-    expect(env.payload.mime_type).toBe('application/pdf')
+    expect(env.payload_type).toBe('application/pdf')
   })
 
-  it('includes transcript in payload when provided', () => {
-    const env = createEnvelope({
+  it('defaults payload_type from the content shape', () => {
+    const text = createEnvelope({ ...makeBaseParams(), content: 'plain words' })
+    expect(text.payload_type).toBe('text/plain')
+
+    const structured = createEnvelope({
       ...makeBaseParams(),
-      payload_type: 'voice',
-      transcript: 'Hello world',
+      content: { transcript: 'Hello world' },
     })
-    expect(env.payload.transcript).toBe('Hello world')
+    expect(structured.payload_type).toBe('application/json')
+    expect(structured.payload).toEqual({ transcript: 'Hello world' })
+  })
+
+  it('records reply_to when the message is a response', () => {
+    const env = createEnvelope({ ...makeBaseParams(), reply_to: 'msg-original' })
+    expect(env.reply_to).toBe('msg-original')
   })
 })
 
@@ -183,9 +190,10 @@ describe('signEnvelope', () => {
   it('preserves all original fields after signing', async () => {
     const env = createEnvelope(makeBaseParams())
     const signed = await signEnvelope(env, TEST_PRIVATE_KEY)
-    expect(signed.id).toBe(env.id)
-    expect(signed.sender).toEqual(env.sender)
-    expect(signed.recipient).toEqual(env.recipient)
+    expect(signed.message_id).toBe(env.message_id)
+    expect(signed.sender_did).toEqual(env.sender_did)
+    expect(signed.sender_type).toEqual(env.sender_type)
+    expect(signed.recipient_did).toEqual(env.recipient_did)
     expect(signed.intent).toBe(env.intent)
     expect(signed.payload).toEqual(env.payload)
     expect(signed.created_at).toBe(env.created_at)
@@ -195,7 +203,7 @@ describe('signEnvelope', () => {
     const env1 = createEnvelope(makeBaseParams())
     const env2 = createEnvelope({ ...makeBaseParams(), content: 'Different content' })
     // Force same id/timestamp for a fair comparison
-    const env2Patched = { ...env2, id: env1.id, created_at: env1.created_at }
+    const env2Patched = { ...env2, id: env1.message_id, created_at: env1.created_at }
     const signed1 = await signEnvelope(env1, TEST_PRIVATE_KEY)
     const signed2 = await signEnvelope(env2Patched, TEST_PRIVATE_KEY)
     expect(signed1.signature).not.toBe(signed2.signature)
@@ -219,7 +227,7 @@ describe('signEnvelope', () => {
 
 describe('verifyEnvelope', () => {
   async function signedPair(): Promise<{
-    signed: ReachMessage
+    signed: ChiEnvelope
     publicKeyHex: string
   }> {
     const privBytes = hexToBytes(TEST_PRIVATE_KEY)
@@ -252,7 +260,7 @@ describe('verifyEnvelope', () => {
     const { signed, publicKeyHex } = await signedPair()
     const mutated = {
       ...signed,
-      payload: { ...signed.payload, content: 'Evil content!' },
+      payload: 'Evil content!',
     }
     const result = await verifyEnvelope(mutated, publicKeyHex)
     expect(result).toBe(false)
@@ -294,39 +302,40 @@ describe('validateEnvelope', () => {
     expect(validateEnvelope(undefined)).toBe(false)
   })
 
-  it('returns false when chi version is wrong', () => {
-    const env = { ...createEnvelope(makeBaseParams()), chi: '2.0' }
+  it('returns false when the protocol version is wrong', () => {
+    const env = { ...createEnvelope(makeBaseParams()), version: '2.0' }
     expect(validateEnvelope(env)).toBe(false)
   })
 
-  it('returns false when id is missing', () => {
+  it('returns false when message_id is missing', () => {
     const env = createEnvelope(makeBaseParams())
-    const { id: _id, ...noId } = env
+    const { message_id: _id, ...noId } = env
     expect(validateEnvelope(noId)).toBe(false)
   })
 
-  it('returns false when sender.type is invalid', () => {
+  it('returns false when sender_type is not an Entity Identity code', () => {
     const env = createEnvelope(makeBaseParams())
-    const bad = { ...env, sender: { ...env.sender, type: 'INVALID' } }
-    expect(validateEnvelope(bad)).toBe(false)
+    expect(validateEnvelope({ ...env, sender_type: 'INVALID' })).toBe(false)
+    // The router's old vocabulary is not accepted either.
+    expect(validateEnvelope({ ...env, sender_type: 'agent' })).toBe(false)
   })
 
   it('returns false when intent is invalid', () => {
     const env = createEnvelope(makeBaseParams())
-    const bad = { ...env, intent: 'SHOUT' }
+    const bad = { ...env, intent: 'shout.loudly' }
     expect(validateEnvelope(bad)).toBe(false)
   })
 
   it('returns false when priority is out of range', () => {
     const env = createEnvelope(makeBaseParams())
-    const bad = { ...env, priority: 5 }
+    const bad = { ...env, priority: 256 }
     expect(validateEnvelope(bad)).toBe(false)
   })
 
   it('returns false when ttl is zero', () => {
     // Bypass createEnvelope guard to construct a bad envelope directly
     const env = createEnvelope(makeBaseParams())
-    const bad = { ...env, ttl: 0 }
+    const bad = { ...env, ttl_seconds: 0 }
     expect(validateEnvelope(bad)).toBe(false)
   })
 
@@ -336,10 +345,19 @@ describe('validateEnvelope', () => {
     expect(validateEnvelope(bad)).toBe(false)
   })
 
-  it('returns false when payload.type is invalid', () => {
+  it('returns false when payload_type is empty', () => {
     const env = createEnvelope(makeBaseParams())
-    const bad = { ...env, payload: { ...env.payload, type: 'video' } }
-    expect(validateEnvelope(bad)).toBe(false)
+    expect(validateEnvelope({ ...env, payload_type: '' })).toBe(false)
+  })
+
+  it('returns false when ttl_seconds exceeds the 7-day maximum', () => {
+    const env = createEnvelope(makeBaseParams())
+    expect(validateEnvelope({ ...env, ttl_seconds: 604_801 })).toBe(false)
+  })
+
+  it('returns false when a DID is not did:-prefixed', () => {
+    const env = createEnvelope(makeBaseParams())
+    expect(validateEnvelope({ ...env, recipient_did: 'cosmos1nope' })).toBe(false)
   })
 
   it('returns false for a plain string', () => {
@@ -361,8 +379,8 @@ describe('isExpired', () => {
     const env = createEnvelope(makeBaseParams())
     const old = {
       ...env,
-      created_at: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-      ttl: 3600,
+      created_at: Date.now() - 48 * 3600 * 1000,
+      ttl_seconds: 3600,
     }
     expect(isExpired(old)).toBe(true)
   })
@@ -372,8 +390,8 @@ describe('isExpired', () => {
     const forceExpired = {
       ...env,
       // 10 seconds ago with a 1-second TTL — unambiguously expired
-      created_at: new Date(Date.now() - 10_000).toISOString(),
-      ttl: 1,
+      created_at: Date.now() - 10_000,
+      ttl_seconds: 1,
     }
     expect(isExpired(forceExpired)).toBe(true)
   })

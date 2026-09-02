@@ -3,7 +3,7 @@
  */
 
 /** All possible CHI error codes */
-export type ReachErrorCode =
+export type ChiErrorCode =
   | 'PERMISSION_DENIED'       // recipient's preferences block this sender
   | 'RECIPIENT_NOT_FOUND'     // recipient DID not registered on-chain
   | 'SENDER_PROOF_INVALID'    // ZK proof attached to envelope is invalid
@@ -22,13 +22,13 @@ export type ReachErrorCode =
  * Base error class for all CHI SDK errors.
  * Always carries a machine-readable `code` alongside the human message.
  */
-export class ReachError extends Error {
-  public readonly code: ReachErrorCode
+export class ChiError extends Error {
+  public readonly code: ChiErrorCode
 
-  constructor(code: ReachErrorCode, message: string) {
+  constructor(code: ChiErrorCode, message: string) {
     super(message)
     this.code = code
-    this.name = 'ReachError'
+    this.name = 'ChiError'
     // Maintain proper prototype chain in transpiled environments
     Object.setPrototypeOf(this, new.target.prototype)
   }
@@ -43,7 +43,7 @@ export class ReachError extends Error {
 }
 
 /** Thrown when envelope validation fails */
-export class InvalidEnvelopeError extends ReachError {
+export class InvalidEnvelopeError extends ChiError {
   public readonly field?: string
 
   constructor(message: string, field?: string) {
@@ -54,7 +54,7 @@ export class InvalidEnvelopeError extends ReachError {
 }
 
 /** Thrown when a signature operation fails */
-export class SignatureError extends ReachError {
+export class SignatureError extends ChiError {
   constructor(code: 'SIGNING_FAILED' | 'SIGNATURE_INVALID', message: string) {
     super(code, message)
     this.name = 'SignatureError'
@@ -62,7 +62,7 @@ export class SignatureError extends ReachError {
 }
 
 /** Thrown when the router returns a non-2xx response */
-export class RouterError extends ReachError {
+export class RouterError extends ChiError {
   public readonly statusCode: number
   public readonly routerMessage?: string
 
@@ -78,7 +78,7 @@ export class RouterError extends ReachError {
 }
 
 /** Thrown when waitForAck polling exceeds the timeout */
-export class TimeoutError extends ReachError {
+export class TimeoutError extends ChiError {
   public readonly message_id: string
 
   constructor(message_id: string, timeout_ms: number) {
@@ -89,7 +89,7 @@ export class TimeoutError extends ReachError {
 }
 
 /** Thrown when required configuration is missing */
-export class ConfigError extends ReachError {
+export class ConfigError extends ChiError {
   public readonly field: string
 
   constructor(field: string) {
