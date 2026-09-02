@@ -1,0 +1,1419 @@
+{
+  "contract_name": "contacthi-contracts",
+  "contract_version": "0.1.0",
+  "idl_version": "1.0.0",
+  "instantiate": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "InstantiateMsg",
+    "type": "object",
+    "properties": {
+      "admin": {
+        "description": "Optional admin address. If omitted, the instantiator becomes admin.",
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "execute": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ExecuteMsg",
+    "oneOf": [
+      {
+        "description": "Create a new preference profile for the caller. Fails if one already exists.",
+        "type": "object",
+        "required": [
+          "register_preferences"
+        ],
+        "properties": {
+          "register_preferences": {
+            "type": "object",
+            "required": [
+              "default_policy",
+              "rules"
+            ],
+            "properties": {
+              "default_policy": {
+                "$ref": "#/definitions/DefaultPolicy"
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/PreferenceRule"
+                }
+              },
+              "webhook_url": {
+                "description": "Must start with \"https://\" when provided.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Replace the caller's entire preference profile (rules + policy + webhook).",
+        "type": "object",
+        "required": [
+          "update_preferences"
+        ],
+        "properties": {
+          "update_preferences": {
+            "type": "object",
+            "required": [
+              "default_policy",
+              "rules"
+            ],
+            "properties": {
+              "default_policy": {
+                "$ref": "#/definitions/DefaultPolicy"
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/PreferenceRule"
+                }
+              },
+              "webhook_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Append a single rule to the caller's existing profile.",
+        "type": "object",
+        "required": [
+          "add_rule"
+        ],
+        "properties": {
+          "add_rule": {
+            "type": "object",
+            "required": [
+              "rule"
+            ],
+            "properties": {
+              "rule": {
+                "$ref": "#/definitions/PreferenceRule"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Remove the rule at position `index` from the caller's profile.",
+        "type": "object",
+        "required": [
+          "remove_rule"
+        ],
+        "properties": {
+          "remove_rule": {
+            "type": "object",
+            "required": [
+              "index"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Add a DID or domain pattern to the caller's global blocklist.",
+        "type": "object",
+        "required": [
+          "block_sender"
+        ],
+        "properties": {
+          "block_sender": {
+            "type": "object",
+            "required": [
+              "pattern"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Remove a pattern from the caller's global blocklist.",
+        "type": "object",
+        "required": [
+          "unblock_sender"
+        ],
+        "properties": {
+          "unblock_sender": {
+            "type": "object",
+            "required": [
+              "pattern"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Delete the caller's preference profile entirely.",
+        "type": "object",
+        "required": [
+          "delete_preferences"
+        ],
+        "properties": {
+          "delete_preferences": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    ],
+    "definitions": {
+      "Channel": {
+        "description": "Delivery channels that a rule may permit.",
+        "type": "string",
+        "enum": [
+          "push",
+          "sms",
+          "email",
+          "webhook",
+          "in_app",
+          "agent_inbox"
+        ]
+      },
+      "DefaultPolicy": {
+        "description": "Whether unmatched requests default to allowed or blocked.",
+        "oneOf": [
+          {
+            "description": "Deny anything not explicitly permitted (opt-in model, recommended default).",
+            "type": "string",
+            "enum": [
+              "block"
+            ]
+          },
+          {
+            "description": "Allow anything not explicitly denied (opt-out model).",
+            "type": "string",
+            "enum": [
+              "allow"
+            ]
+          }
+        ]
+      },
+      "EntityType": {
+        "description": "Entity Identity type codes from the Entity Identity specification.\n\n`#[cw_serde]` applies `rename_all = \"snake_case\"`, which mangles two-letter codes into `\"c_a\"` / `\"a_a\"` / `\"u_s\"`. Every other artefact in this project — protocol-spec.md §4.3, the SDK's `EntityType`, the README examples — says `\"CA\"`, `\"AA\"`, `\"US\"`. Pinned here per-variant so the on-chain vocabulary is the documented one. Safe to change only because no registry has been deployed yet; once one is instantiated this serialization is frozen forever.",
+        "oneOf": [
+          {
+            "description": "Conversational Agent",
+            "type": "string",
+            "enum": [
+              "CA"
+            ]
+          },
+          {
+            "description": "Language Model",
+            "type": "string",
+            "enum": [
+              "LM"
+            ]
+          },
+          {
+            "description": "Generative Model",
+            "type": "string",
+            "enum": [
+              "GN"
+            ]
+          },
+          {
+            "description": "Autonomous Agent",
+            "type": "string",
+            "enum": [
+              "AA"
+            ]
+          },
+          {
+            "description": "Robot",
+            "type": "string",
+            "enum": [
+              "RB"
+            ]
+          },
+          {
+            "description": "Drone",
+            "type": "string",
+            "enum": [
+              "DR"
+            ]
+          },
+          {
+            "description": "Vehicle",
+            "type": "string",
+            "enum": [
+              "VH"
+            ]
+          },
+          {
+            "description": "Human User",
+            "type": "string",
+            "enum": [
+              "US"
+            ]
+          },
+          {
+            "description": "Copilot",
+            "type": "string",
+            "enum": [
+              "CP"
+            ]
+          },
+          {
+            "description": "Hive / Swarm",
+            "type": "string",
+            "enum": [
+              "HS"
+            ]
+          },
+          {
+            "description": "Wildcard — matches any entity type",
+            "type": "string",
+            "enum": [
+              "any"
+            ]
+          }
+        ]
+      },
+      "Intent": {
+        "description": "Intent codes for the message being sent.",
+        "oneOf": [
+          {
+            "description": "Informational — no action required",
+            "type": "string",
+            "enum": [
+              "inform"
+            ]
+          },
+          {
+            "description": "Data collection request",
+            "type": "string",
+            "enum": [
+              "collect"
+            ]
+          },
+          {
+            "description": "Authorization request",
+            "type": "string",
+            "enum": [
+              "authorize"
+            ]
+          },
+          {
+            "description": "Escalation / alert",
+            "type": "string",
+            "enum": [
+              "escalate"
+            ]
+          },
+          {
+            "description": "Result / response delivery",
+            "type": "string",
+            "enum": [
+              "result"
+            ]
+          },
+          {
+            "description": "Wildcard — matches any intent",
+            "type": "string",
+            "enum": [
+              "any"
+            ]
+          }
+        ]
+      },
+      "PreferenceRule": {
+        "description": "A single preference rule matching a sender-type + intent combination.",
+        "type": "object",
+        "required": [
+          "allowed_channels",
+          "blocklist",
+          "intent",
+          "sender_type"
+        ],
+        "properties": {
+          "allowed_channels": {
+            "description": "Channels permitted when this rule matches.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Channel"
+            }
+          },
+          "blocklist": {
+            "description": "DID or domain patterns that are denied even if the rule would otherwise match.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "intent": {
+            "description": "Which intent this rule applies to (`Any` = wildcard).",
+            "allOf": [
+              {
+                "$ref": "#/definitions/Intent"
+              }
+            ]
+          },
+          "rate_limit": {
+            "description": "Optional per-rule rate limit.",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/RateLimit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sender_type": {
+            "description": "Which sender type this rule applies to (`Any` = wildcard).",
+            "allOf": [
+              {
+                "$ref": "#/definitions/EntityType"
+              }
+            ]
+          },
+          "time_window": {
+            "description": "Optional time-of-day restriction (UTC).",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/TimeWindow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "RateLimit": {
+        "description": "Per-period rate limit.",
+        "type": "object",
+        "required": [
+          "count",
+          "period_seconds"
+        ],
+        "properties": {
+          "count": {
+            "description": "Maximum number of messages permitted within `period_seconds`.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          },
+          "period_seconds": {
+            "description": "Rolling window size in seconds (e.g. 86400 for one day).",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        "additionalProperties": false
+      },
+      "TimeWindow": {
+        "description": "Allowed contact time window in UTC.",
+        "type": "object",
+        "required": [
+          "end_hour",
+          "end_minute",
+          "start_hour",
+          "start_minute"
+        ],
+        "properties": {
+          "end_hour": {
+            "description": "UTC hour for window close (0–23).",
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          "end_minute": {
+            "description": "UTC minute for window close (0–59).",
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          "start_hour": {
+            "description": "UTC hour for window open (0–23).",
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          },
+          "start_minute": {
+            "description": "UTC minute for window open (0–59).",
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "query": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "QueryMsg",
+    "oneOf": [
+      {
+        "description": "Return the full preference profile for `address`.",
+        "type": "object",
+        "required": [
+          "get_preferences"
+        ],
+        "properties": {
+          "get_preferences": {
+            "type": "object",
+            "required": [
+              "address"
+            ],
+            "properties": {
+              "address": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Check whether `sender_did` may contact `recipient` with the given intent.",
+        "type": "object",
+        "required": [
+          "check_permission"
+        ],
+        "properties": {
+          "check_permission": {
+            "type": "object",
+            "required": [
+              "intent",
+              "recipient",
+              "sender_did",
+              "sender_type"
+            ],
+            "properties": {
+              "intent": {
+                "description": "The intent of the message.",
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/Intent"
+                  }
+                ]
+              },
+              "recipient": {
+                "description": "The recipient's bech32 address.",
+                "type": "string"
+              },
+              "sender_did": {
+                "description": "The DID (or address) of the entity attempting to send.",
+                "type": "string"
+              },
+              "sender_type": {
+                "description": "The entity type code of the sender.",
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/EntityType"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Check whether `sender_pattern` matches any blocked entry for `recipient`.",
+        "type": "object",
+        "required": [
+          "is_blocked"
+        ],
+        "properties": {
+          "is_blocked": {
+            "type": "object",
+            "required": [
+              "recipient",
+              "sender_pattern"
+            ],
+            "properties": {
+              "recipient": {
+                "type": "string"
+              },
+              "sender_pattern": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Return the list of rules for `address`.",
+        "type": "object",
+        "required": [
+          "get_rules"
+        ],
+        "properties": {
+          "get_rules": {
+            "type": "object",
+            "required": [
+              "address"
+            ],
+            "properties": {
+              "address": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    ],
+    "definitions": {
+      "EntityType": {
+        "description": "Entity Identity type codes from the Entity Identity specification.\n\n`#[cw_serde]` applies `rename_all = \"snake_case\"`, which mangles two-letter codes into `\"c_a\"` / `\"a_a\"` / `\"u_s\"`. Every other artefact in this project — protocol-spec.md §4.3, the SDK's `EntityType`, the README examples — says `\"CA\"`, `\"AA\"`, `\"US\"`. Pinned here per-variant so the on-chain vocabulary is the documented one. Safe to change only because no registry has been deployed yet; once one is instantiated this serialization is frozen forever.",
+        "oneOf": [
+          {
+            "description": "Conversational Agent",
+            "type": "string",
+            "enum": [
+              "CA"
+            ]
+          },
+          {
+            "description": "Language Model",
+            "type": "string",
+            "enum": [
+              "LM"
+            ]
+          },
+          {
+            "description": "Generative Model",
+            "type": "string",
+            "enum": [
+              "GN"
+            ]
+          },
+          {
+            "description": "Autonomous Agent",
+            "type": "string",
+            "enum": [
+              "AA"
+            ]
+          },
+          {
+            "description": "Robot",
+            "type": "string",
+            "enum": [
+              "RB"
+            ]
+          },
+          {
+            "description": "Drone",
+            "type": "string",
+            "enum": [
+              "DR"
+            ]
+          },
+          {
+            "description": "Vehicle",
+            "type": "string",
+            "enum": [
+              "VH"
+            ]
+          },
+          {
+            "description": "Human User",
+            "type": "string",
+            "enum": [
+              "US"
+            ]
+          },
+          {
+            "description": "Copilot",
+            "type": "string",
+            "enum": [
+              "CP"
+            ]
+          },
+          {
+            "description": "Hive / Swarm",
+            "type": "string",
+            "enum": [
+              "HS"
+            ]
+          },
+          {
+            "description": "Wildcard — matches any entity type",
+            "type": "string",
+            "enum": [
+              "any"
+            ]
+          }
+        ]
+      },
+      "Intent": {
+        "description": "Intent codes for the message being sent.",
+        "oneOf": [
+          {
+            "description": "Informational — no action required",
+            "type": "string",
+            "enum": [
+              "inform"
+            ]
+          },
+          {
+            "description": "Data collection request",
+            "type": "string",
+            "enum": [
+              "collect"
+            ]
+          },
+          {
+            "description": "Authorization request",
+            "type": "string",
+            "enum": [
+              "authorize"
+            ]
+          },
+          {
+            "description": "Escalation / alert",
+            "type": "string",
+            "enum": [
+              "escalate"
+            ]
+          },
+          {
+            "description": "Result / response delivery",
+            "type": "string",
+            "enum": [
+              "result"
+            ]
+          },
+          {
+            "description": "Wildcard — matches any intent",
+            "type": "string",
+            "enum": [
+              "any"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "migrate": null,
+  "sudo": null,
+  "responses": {
+    "check_permission": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PermissionResponse",
+      "type": "object",
+      "required": [
+        "allowed",
+        "allowed_channels"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "allowed_channels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Channel"
+          }
+        },
+        "rate_limit_remaining": {
+          "description": "Remaining calls allowed in the current rate-limit window, if applicable.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "reason": {
+          "description": "Human-readable reason when denied or rate-limited.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "Channel": {
+          "description": "Delivery channels that a rule may permit.",
+          "type": "string",
+          "enum": [
+            "push",
+            "sms",
+            "email",
+            "webhook",
+            "in_app",
+            "agent_inbox"
+          ]
+        }
+      }
+    },
+    "get_preferences": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PreferencesResponse",
+      "type": "object",
+      "required": [
+        "default_policy",
+        "owner",
+        "rules",
+        "updated_at"
+      ],
+      "properties": {
+        "default_policy": {
+          "$ref": "#/definitions/DefaultPolicy"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PreferenceRule"
+          }
+        },
+        "updated_at": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "webhook_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "Channel": {
+          "description": "Delivery channels that a rule may permit.",
+          "type": "string",
+          "enum": [
+            "push",
+            "sms",
+            "email",
+            "webhook",
+            "in_app",
+            "agent_inbox"
+          ]
+        },
+        "DefaultPolicy": {
+          "description": "Whether unmatched requests default to allowed or blocked.",
+          "oneOf": [
+            {
+              "description": "Deny anything not explicitly permitted (opt-in model, recommended default).",
+              "type": "string",
+              "enum": [
+                "block"
+              ]
+            },
+            {
+              "description": "Allow anything not explicitly denied (opt-out model).",
+              "type": "string",
+              "enum": [
+                "allow"
+              ]
+            }
+          ]
+        },
+        "EntityType": {
+          "description": "Entity Identity type codes from the Entity Identity specification.\n\n`#[cw_serde]` applies `rename_all = \"snake_case\"`, which mangles two-letter codes into `\"c_a\"` / `\"a_a\"` / `\"u_s\"`. Every other artefact in this project — protocol-spec.md §4.3, the SDK's `EntityType`, the README examples — says `\"CA\"`, `\"AA\"`, `\"US\"`. Pinned here per-variant so the on-chain vocabulary is the documented one. Safe to change only because no registry has been deployed yet; once one is instantiated this serialization is frozen forever.",
+          "oneOf": [
+            {
+              "description": "Conversational Agent",
+              "type": "string",
+              "enum": [
+                "CA"
+              ]
+            },
+            {
+              "description": "Language Model",
+              "type": "string",
+              "enum": [
+                "LM"
+              ]
+            },
+            {
+              "description": "Generative Model",
+              "type": "string",
+              "enum": [
+                "GN"
+              ]
+            },
+            {
+              "description": "Autonomous Agent",
+              "type": "string",
+              "enum": [
+                "AA"
+              ]
+            },
+            {
+              "description": "Robot",
+              "type": "string",
+              "enum": [
+                "RB"
+              ]
+            },
+            {
+              "description": "Drone",
+              "type": "string",
+              "enum": [
+                "DR"
+              ]
+            },
+            {
+              "description": "Vehicle",
+              "type": "string",
+              "enum": [
+                "VH"
+              ]
+            },
+            {
+              "description": "Human User",
+              "type": "string",
+              "enum": [
+                "US"
+              ]
+            },
+            {
+              "description": "Copilot",
+              "type": "string",
+              "enum": [
+                "CP"
+              ]
+            },
+            {
+              "description": "Hive / Swarm",
+              "type": "string",
+              "enum": [
+                "HS"
+              ]
+            },
+            {
+              "description": "Wildcard — matches any entity type",
+              "type": "string",
+              "enum": [
+                "any"
+              ]
+            }
+          ]
+        },
+        "Intent": {
+          "description": "Intent codes for the message being sent.",
+          "oneOf": [
+            {
+              "description": "Informational — no action required",
+              "type": "string",
+              "enum": [
+                "inform"
+              ]
+            },
+            {
+              "description": "Data collection request",
+              "type": "string",
+              "enum": [
+                "collect"
+              ]
+            },
+            {
+              "description": "Authorization request",
+              "type": "string",
+              "enum": [
+                "authorize"
+              ]
+            },
+            {
+              "description": "Escalation / alert",
+              "type": "string",
+              "enum": [
+                "escalate"
+              ]
+            },
+            {
+              "description": "Result / response delivery",
+              "type": "string",
+              "enum": [
+                "result"
+              ]
+            },
+            {
+              "description": "Wildcard — matches any intent",
+              "type": "string",
+              "enum": [
+                "any"
+              ]
+            }
+          ]
+        },
+        "PreferenceRule": {
+          "description": "A single preference rule matching a sender-type + intent combination.",
+          "type": "object",
+          "required": [
+            "allowed_channels",
+            "blocklist",
+            "intent",
+            "sender_type"
+          ],
+          "properties": {
+            "allowed_channels": {
+              "description": "Channels permitted when this rule matches.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Channel"
+              }
+            },
+            "blocklist": {
+              "description": "DID or domain patterns that are denied even if the rule would otherwise match.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "intent": {
+              "description": "Which intent this rule applies to (`Any` = wildcard).",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Intent"
+                }
+              ]
+            },
+            "rate_limit": {
+              "description": "Optional per-rule rate limit.",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/RateLimit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sender_type": {
+              "description": "Which sender type this rule applies to (`Any` = wildcard).",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/EntityType"
+                }
+              ]
+            },
+            "time_window": {
+              "description": "Optional time-of-day restriction (UTC).",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/TimeWindow"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "RateLimit": {
+          "description": "Per-period rate limit.",
+          "type": "object",
+          "required": [
+            "count",
+            "period_seconds"
+          ],
+          "properties": {
+            "count": {
+              "description": "Maximum number of messages permitted within `period_seconds`.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "period_seconds": {
+              "description": "Rolling window size in seconds (e.g. 86400 for one day).",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        },
+        "TimeWindow": {
+          "description": "Allowed contact time window in UTC.",
+          "type": "object",
+          "required": [
+            "end_hour",
+            "end_minute",
+            "start_hour",
+            "start_minute"
+          ],
+          "properties": {
+            "end_hour": {
+              "description": "UTC hour for window close (0–23).",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "end_minute": {
+              "description": "UTC minute for window close (0–59).",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "start_hour": {
+              "description": "UTC hour for window open (0–23).",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "start_minute": {
+              "description": "UTC minute for window open (0–59).",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "get_rules": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "RulesResponse",
+      "type": "object",
+      "required": [
+        "rules"
+      ],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PreferenceRule"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "definitions": {
+        "Channel": {
+          "description": "Delivery channels that a rule may permit.",
+          "type": "string",
+          "enum": [
+            "push",
+            "sms",
+            "email",
+            "webhook",
+            "in_app",
+            "agent_inbox"
+          ]
+        },
+        "EntityType": {
+          "description": "Entity Identity type codes from the Entity Identity specification.\n\n`#[cw_serde]` applies `rename_all = \"snake_case\"`, which mangles two-letter codes into `\"c_a\"` / `\"a_a\"` / `\"u_s\"`. Every other artefact in this project — protocol-spec.md §4.3, the SDK's `EntityType`, the README examples — says `\"CA\"`, `\"AA\"`, `\"US\"`. Pinned here per-variant so the on-chain vocabulary is the documented one. Safe to change only because no registry has been deployed yet; once one is instantiated this serialization is frozen forever.",
+          "oneOf": [
+            {
+              "description": "Conversational Agent",
+              "type": "string",
+              "enum": [
+                "CA"
+              ]
+            },
+            {
+              "description": "Language Model",
+              "type": "string",
+              "enum": [
+                "LM"
+              ]
+            },
+            {
+              "description": "Generative Model",
+              "type": "string",
+              "enum": [
+                "GN"
+              ]
+            },
+            {
+              "description": "Autonomous Agent",
+              "type": "string",
+              "enum": [
+                "AA"
+              ]
+            },
+            {
+              "description": "Robot",
+              "type": "string",
+              "enum": [
+                "RB"
+              ]
+            },
+            {
+              "description": "Drone",
+              "type": "string",
+              "enum": [
+                "DR"
+              ]
+            },
+            {
+              "description": "Vehicle",
+              "type": "string",
+              "enum": [
+                "VH"
+              ]
+            },
+            {
+              "description": "Human User",
+              "type": "string",
+              "enum": [
+                "US"
+              ]
+            },
+            {
+              "description": "Copilot",
+              "type": "string",
+              "enum": [
+                "CP"
+              ]
+            },
+            {
+              "description": "Hive / Swarm",
+              "type": "string",
+              "enum": [
+                "HS"
+              ]
+            },
+            {
+              "description": "Wildcard — matches any entity type",
+              "type": "string",
+              "enum": [
+                "any"
+              ]
+            }
+          ]
+        },
+        "Intent": {
+          "description": "Intent codes for the message being sent.",
+          "oneOf": [
+            {
+              "description": "Informational — no action required",
+              "type": "string",
+              "enum": [
+                "inform"
+              ]
+            },
+            {
+              "description": "Data collection request",
+              "type": "string",
+              "enum": [
+                "collect"
+              ]
+            },
+            {
+              "description": "Authorization request",
+              "type": "string",
+              "enum": [
+                "authorize"
+              ]
+            },
+            {
+              "description": "Escalation / alert",
+              "type": "string",
+              "enum": [
+                "escalate"
+              ]
+            },
+            {
+              "description": "Result / response delivery",
+              "type": "string",
+              "enum": [
+                "result"
+              ]
+            },
+            {
+              "description": "Wildcard — matches any intent",
+              "type": "string",
+              "enum": [
+                "any"
+              ]
+            }
+          ]
+        },
+        "PreferenceRule": {
+          "description": "A single preference rule matching a sender-type + intent combination.",
+          "type": "object",
+          "required": [
+            "allowed_channels",
+            "blocklist",
+            "intent",
+            "sender_type"
+          ],
+          "properties": {
+            "allowed_channels": {
+              "description": "Channels permitted when this rule matches.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Channel"
+              }
+            },
+            "blocklist": {
+              "description": "DID or domain patterns that are denied even if the rule would otherwise match.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "intent": {
+              "description": "Which intent this rule applies to (`Any` = wildcard).",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Intent"
+                }
+              ]
+            },
+            "rate_limit": {
+              "description": "Optional per-rule rate limit.",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/RateLimit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sender_type": {
+              "description": "Which sender type this rule applies to (`Any` = wildcard).",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/EntityType"
+                }
+              ]
+            },
+            "time_window": {
+              "description": "Optional time-of-day restriction (UTC).",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/TimeWindow"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "RateLimit": {
+          "description": "Per-period rate limit.",
+          "type": "object",
+          "required": [
+            "count",
+            "period_seconds"
+          ],
+          "properties": {
+            "count": {
+              "description": "Maximum number of messages permitted within `period_seconds`.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "period_seconds": {
+              "description": "Rolling window size in seconds (e.g. 86400 for one day).",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        },
+        "TimeWindow": {
+          "description": "Allowed contact time window in UTC.",
+          "type": "object",
+          "required": [
+            "end_hour",
+            "end_minute",
+            "start_hour",
+            "start_minute"
+          ],
+          "properties": {
+            "end_hour": {
+              "description": "UTC hour for window close (0–23).",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "end_minute": {
+              "description": "UTC minute for window close (0–59).",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "start_hour": {
+              "description": "UTC hour for window open (0–23).",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "start_minute": {
+              "description": "UTC minute for window open (0–59).",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "is_blocked": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "IsBlockedResponse",
+      "type": "object",
+      "required": [
+        "blocked"
+      ],
+      "properties": {
+        "blocked": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

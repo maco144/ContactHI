@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PermissionResponse",
+  "type": "object",
+  "required": [
+    "allowed",
+    "allowed_channels"
+  ],
+  "properties": {
+    "allowed": {
+      "type": "boolean"
+    },
+    "allowed_channels": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Channel"
+      }
+    },
+    "rate_limit_remaining": {
+      "description": "Remaining calls allowed in the current rate-limit window, if applicable.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "reason": {
+      "description": "Human-readable reason when denied or rate-limited.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Channel": {
+      "description": "Delivery channels that a rule may permit.",
+      "type": "string",
+      "enum": [
+        "push",
+        "sms",
+        "email",
+        "webhook",
+        "in_app",
+        "agent_inbox"
+      ]
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { config } from './config';
 import { healthRouter } from './routes/health';
 import { sendRouter } from './routes/send';
 import { statusRouter } from './routes/status';
+import { checkPermissionRouter } from './routes/checkPermission';
 import { rateLimitMiddleware } from './middleware/rateLimit';
 import { registerNode, startHeartbeat, startExpirySweep } from './services/spacetime';
 
@@ -18,6 +19,7 @@ app.use(rateLimitMiddleware);
 app.use('/v1/health', healthRouter);
 app.use('/v1/send', sendRouter);
 app.use('/v1/status', statusRouter);
+app.use('/v1/check-permission', checkPermissionRouter);
 
 // Root — node info page
 app.get('/', (_req, res) => {
@@ -54,6 +56,7 @@ h1{color:#ffb000;font-size:1.4rem;margin-bottom:.4rem}
   <div class="row"><span class="k">health</span><span class="v"><a href="/v1/health" style="color:#00ff41">/v1/health</a></span></div>
   <div class="row"><span class="k">send endpoint</span><span class="v">POST /v1/send</span></div>
   <div class="row"><span class="k">status endpoint</span><span class="v">GET /v1/status/:id</span></div>
+  <div class="row"><span class="k">permission check</span><span class="v">POST /v1/check-permission</span></div>
   <div class="links">
     <a href="https://chi.codes" target="_blank">Developer Docs →</a>
     <a href="https://chi.contact" target="_blank">For Humans →</a>

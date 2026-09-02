@@ -1,0 +1,285 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RulesResponse",
+  "type": "object",
+  "required": [
+    "rules"
+  ],
+  "properties": {
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/PreferenceRule"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Channel": {
+      "description": "Delivery channels that a rule may permit.",
+      "type": "string",
+      "enum": [
+        "push",
+        "sms",
+        "email",
+        "webhook",
+        "in_app",
+        "agent_inbox"
+      ]
+    },
+    "EntityType": {
+      "description": "Entity Identity type codes from the Entity Identity specification.\n\n`#[cw_serde]` applies `rename_all = \"snake_case\"`, which mangles two-letter codes into `\"c_a\"` / `\"a_a\"` / `\"u_s\"`. Every other artefact in this project — protocol-spec.md §4.3, the SDK's `EntityType`, the README examples — says `\"CA\"`, `\"AA\"`, `\"US\"`. Pinned here per-variant so the on-chain vocabulary is the documented one. Safe to change only because no registry has been deployed yet; once one is instantiated this serialization is frozen forever.",
+      "oneOf": [
+        {
+          "description": "Conversational Agent",
+          "type": "string",
+          "enum": [
+            "CA"
+          ]
+        },
+        {
+          "description": "Language Model",
+          "type": "string",
+          "enum": [
+            "LM"
+          ]
+        },
+        {
+          "description": "Generative Model",
+          "type": "string",
+          "enum": [
+            "GN"
+          ]
+        },
+        {
+          "description": "Autonomous Agent",
+          "type": "string",
+          "enum": [
+            "AA"
+          ]
+        },
+        {
+          "description": "Robot",
+          "type": "string",
+          "enum": [
+            "RB"
+          ]
+        },
+        {
+          "description": "Drone",
+          "type": "string",
+          "enum": [
+            "DR"
+          ]
+        },
+        {
+          "description": "Vehicle",
+          "type": "string",
+          "enum": [
+            "VH"
+          ]
+        },
+        {
+          "description": "Human User",
+          "type": "string",
+          "enum": [
+            "US"
+          ]
+        },
+        {
+          "description": "Copilot",
+          "type": "string",
+          "enum": [
+            "CP"
+          ]
+        },
+        {
+          "description": "Hive / Swarm",
+          "type": "string",
+          "enum": [
+            "HS"
+          ]
+        },
+        {
+          "description": "Wildcard — matches any entity type",
+          "type": "string",
+          "enum": [
+            "any"
+          ]
+        }
+      ]
+    },
+    "Intent": {
+      "description": "Intent codes for the message being sent.",
+      "oneOf": [
+        {
+          "description": "Informational — no action required",
+          "type": "string",
+          "enum": [
+            "inform"
+          ]
+        },
+        {
+          "description": "Data collection request",
+          "type": "string",
+          "enum": [
+            "collect"
+          ]
+        },
+        {
+          "description": "Authorization request",
+          "type": "string",
+          "enum": [
+            "authorize"
+          ]
+        },
+        {
+          "description": "Escalation / alert",
+          "type": "string",
+          "enum": [
+            "escalate"
+          ]
+        },
+        {
+          "description": "Result / response delivery",
+          "type": "string",
+          "enum": [
+            "result"
+          ]
+        },
+        {
+          "description": "Wildcard — matches any intent",
+          "type": "string",
+          "enum": [
+            "any"
+          ]
+        }
+      ]
+    },
+    "PreferenceRule": {
+      "description": "A single preference rule matching a sender-type + intent combination.",
+      "type": "object",
+      "required": [
+        "allowed_channels",
+        "blocklist",
+        "intent",
+        "sender_type"
+      ],
+      "properties": {
+        "allowed_channels": {
+          "description": "Channels permitted when this rule matches.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Channel"
+          }
+        },
+        "blocklist": {
+          "description": "DID or domain patterns that are denied even if the rule would otherwise match.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "intent": {
+          "description": "Which intent this rule applies to (`Any` = wildcard).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Intent"
+            }
+          ]
+        },
+        "rate_limit": {
+          "description": "Optional per-rule rate limit.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RateLimit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sender_type": {
+          "description": "Which sender type this rule applies to (`Any` = wildcard).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EntityType"
+            }
+          ]
+        },
+        "time_window": {
+          "description": "Optional time-of-day restriction (UTC).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TimeWindow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RateLimit": {
+      "description": "Per-period rate limit.",
+      "type": "object",
+      "required": [
+        "count",
+        "period_seconds"
+      ],
+      "properties": {
+        "count": {
+          "description": "Maximum number of messages permitted within `period_seconds`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "period_seconds": {
+          "description": "Rolling window size in seconds (e.g. 86400 for one day).",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "TimeWindow": {
+      "description": "Allowed contact time window in UTC.",
+      "type": "object",
+      "required": [
+        "end_hour",
+        "end_minute",
+        "start_hour",
+        "start_minute"
+      ],
+      "properties": {
+        "end_hour": {
+          "description": "UTC hour for window close (0–23).",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "end_minute": {
+          "description": "UTC minute for window close (0–59).",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "start_hour": {
+          "description": "UTC hour for window open (0–23).",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "start_minute": {
+          "description": "UTC minute for window open (0–59).",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

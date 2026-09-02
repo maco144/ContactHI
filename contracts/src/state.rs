@@ -7,27 +7,44 @@ use cw_storage_plus::Map;
 // ---------------------------------------------------------------------------
 
 /// Entity Identity type codes from the Entity Identity specification.
+///
+/// `#[cw_serde]` applies `rename_all = "snake_case"`, which mangles two-letter
+/// codes into `"c_a"` / `"a_a"` / `"u_s"`. Every other artefact in this project —
+/// protocol-spec.md §4.3, the SDK's `EntityType`, the README examples — says
+/// `"CA"`, `"AA"`, `"US"`. Pinned here per-variant so the on-chain vocabulary is
+/// the documented one. Safe to change only because no registry has been deployed
+/// yet; once one is instantiated this serialization is frozen forever.
 #[cw_serde]
 pub enum EntityType {
     /// Conversational Agent
+    #[serde(rename = "CA")]
     CA,
     /// Language Model
+    #[serde(rename = "LM")]
     LM,
     /// Generative Model
+    #[serde(rename = "GN")]
     GN,
     /// Autonomous Agent
+    #[serde(rename = "AA")]
     AA,
     /// Robot
+    #[serde(rename = "RB")]
     RB,
     /// Drone
+    #[serde(rename = "DR")]
     DR,
     /// Vehicle
+    #[serde(rename = "VH")]
     VH,
     /// Human User
+    #[serde(rename = "US")]
     US,
     /// Copilot
+    #[serde(rename = "CP")]
     CP,
     /// Hive / Swarm
+    #[serde(rename = "HS")]
     HS,
     /// Wildcard — matches any entity type
     Any,

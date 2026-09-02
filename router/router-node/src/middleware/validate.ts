@@ -16,8 +16,28 @@ export interface ChiEnvelope {
   signature?: string;    // optional in v1
 }
 
-const VALID_ENTITY_TYPES = new Set(['human', 'agent', 'service', 'device', 'dao']);
-const VALID_INTENTS = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/; // e.g. "message.send"
+/**
+ * Entity Identity codes, matching `contracts/src/state.rs::EntityType` and
+ * protocol-spec.md §4.3. The router previously accepted
+ * `human|agent|service|device|dao`, a vocabulary that appears in no other
+ * artefact in this project — the registry it queries could never have
+ * understood it. Replaced outright rather than aliased; the endpoint has no
+ * real callers.
+ */
+const VALID_ENTITY_TYPES = new Set([
+  'CA', 'LM', 'GN', 'AA', 'RB', 'DR', 'VH', 'US', 'CP', 'HS',
+]);
+
+/**
+ * Envelopes carry a granular namespaced intent; the registry stores the coarse
+ * class. The namespace before the dot MUST be one of the on-chain `Intent`
+ * variants, so `inform.shipping_update` resolves to `inform` when the router
+ * queries the chain. A namespace outside this set can never match a rule.
+ */
+const VALID_INTENT_NAMESPACES = new Set([
+  'inform', 'collect', 'authorize', 'escalate', 'result',
+]);
+const VALID_INTENTS = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/; // e.g. "inform.shipping_update"
 const MAX_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
 export function validateEnvelope(
@@ -71,7 +91,9 @@ export function validateEnvelope(
   if (!VALID_ENTITY_TYPES.has(body.sender_type!)) {
     res.status(400).json({
       error: 'INVALID_SENDER_TYPE',
-      message: `sender_type must be one of: ${[...VALID_ENTITY_TYPES].join(', ')}.`,
+      message:
+        `sender_type must be an Entity Identity code: ${[...VALID_ENTITY_TYPES].join(', ')}. ` +
+        'See protocol-spec.md §4.3.',
     });
     return;
   }
@@ -80,7 +102,20 @@ export function validateEnvelope(
   if (!VALID_INTENTS.test(body.intent!)) {
     res.status(400).json({
       error: 'INVALID_INTENT',
-      message: `intent must match pattern "namespace.action" (e.g. "message.send").`,
+      message:
+        'intent must match pattern "namespace.action" (e.g. "inform.shipping_update").',
+    });
+    return;
+  }
+
+  // intent namespace must be an on-chain Intent class, or no rule can ever match
+  const namespace = body.intent!.split('.')[0];
+  if (!VALID_INTENT_NAMESPACES.has(namespace)) {
+    res.status(400).json({
+      error: 'INVALID_INTENT',
+      message:
+        `intent namespace "${namespace}" is not a registry Intent class. ` +
+        `Must be one of: ${[...VALID_INTENT_NAMESPACES].join(', ')}. See protocol-spec.md §6.3.`,
     });
     return;
   }

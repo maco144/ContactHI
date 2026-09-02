@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QueryMsg",
+  "oneOf": [
+    {
+      "description": "Return the full preference profile for `address`.",
+      "type": "object",
+      "required": [
+        "get_preferences"
+      ],
+      "properties": {
+        "get_preferences": {
+          "type": "object",
+          "required": [
+            "address"
+          ],
+          "properties": {
+            "address": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Check whether `sender_did` may contact `recipient` with the given intent.",
+      "type": "object",
+      "required": [
+        "check_permission"
+      ],
+      "properties": {
+        "check_permission": {
+          "type": "object",
+          "required": [
+            "intent",
+            "recipient",
+            "sender_did",
+            "sender_type"
+          ],
+          "properties": {
+            "intent": {
+              "description": "The intent of the message.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Intent"
+                }
+              ]
+            },
+            "recipient": {
+              "description": "The recipient's bech32 address.",
+              "type": "string"
+            },
+            "sender_did": {
+              "description": "The DID (or address) of the entity attempting to send.",
+              "type": "string"
+            },
+            "sender_type": {
+              "description": "The entity type code of the sender.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/EntityType"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Check whether `sender_pattern` matches any blocked entry for `recipient`.",
+      "type": "object",
+      "required": [
+        "is_blocked"
+      ],
+      "properties": {
+        "is_blocked": {
+          "type": "object",
+          "required": [
+            "recipient",
+            "sender_pattern"
+          ],
+          "properties": {
+            "recipient": {
+              "type": "string"
+            },
+            "sender_pattern": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Return the list of rules for `address`.",
+      "type": "object",
+      "required": [
+        "get_rules"
+      ],
+      "properties": {
+        "get_rules": {
+          "type": "object",
+          "required": [
+            "address"
+          ],
+          "properties": {
+            "address": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "definitions": {
+    "EntityType": {
+      "description": "Entity Identity type codes from the Entity Identity specification.\n\n`#[cw_serde]` applies `rename_all = \"snake_case\"`, which mangles two-letter codes into `\"c_a\"` / `\"a_a\"` / `\"u_s\"`. Every other artefact in this project — protocol-spec.md §4.3, the SDK's `EntityType`, the README examples — says `\"CA\"`, `\"AA\"`, `\"US\"`. Pinned here per-variant so the on-chain vocabulary is the documented one. Safe to change only because no registry has been deployed yet; once one is instantiated this serialization is frozen forever.",
+      "oneOf": [
+        {
+          "description": "Conversational Agent",
+          "type": "string",
+          "enum": [
+            "CA"
+          ]
+        },
+        {
+          "description": "Language Model",
+          "type": "string",
+          "enum": [
+            "LM"
+          ]
+        },
+        {
+          "description": "Generative Model",
+          "type": "string",
+          "enum": [
+            "GN"
+          ]
+        },
+        {
+          "description": "Autonomous Agent",
+          "type": "string",
+          "enum": [
+            "AA"
+          ]
+        },
+        {
+          "description": "Robot",
+          "type": "string",
+          "enum": [
+            "RB"
+          ]
+        },
+        {
+          "description": "Drone",
+          "type": "string",
+          "enum": [
+            "DR"
+          ]
+        },
+        {
+          "description": "Vehicle",
+          "type": "string",
+          "enum": [
+            "VH"
+          ]
+        },
+        {
+          "description": "Human User",
+          "type": "string",
+          "enum": [
+            "US"
+          ]
+        },
+        {
+          "description": "Copilot",
+          "type": "string",
+          "enum": [
+            "CP"
+          ]
+        },
+        {
+          "description": "Hive / Swarm",
+          "type": "string",
+          "enum": [
+            "HS"
+          ]
+        },
+        {
+          "description": "Wildcard — matches any entity type",
+          "type": "string",
+          "enum": [
+            "any"
+          ]
+        }
+      ]
+    },
+    "Intent": {
+      "description": "Intent codes for the message being sent.",
+      "oneOf": [
+        {
+          "description": "Informational — no action required",
+          "type": "string",
+          "enum": [
+            "inform"
+          ]
+        },
+        {
+          "description": "Data collection request",
+          "type": "string",
+          "enum": [
+            "collect"
+          ]
+        },
+        {
+          "description": "Authorization request",
+          "type": "string",
+          "enum": [
+            "authorize"
+          ]
+        },
+        {
+          "description": "Escalation / alert",
+          "type": "string",
+          "enum": [
+            "escalate"
+          ]
+        },
+        {
+          "description": "Result / response delivery",
+          "type": "string",
+          "enum": [
+            "result"
+          ]
+        },
+        {
+          "description": "Wildcard — matches any intent",
+          "type": "string",
+          "enum": [
+            "any"
+          ]
+        }
+      ]
+    }
+  }
+}
