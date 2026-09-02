@@ -250,7 +250,14 @@ a non-null `channel_used`.
 
 ## Testing Philosophy
 
-- SDK tests live in `sdk/tests/` and use Jest + ts-jest
-- Contract tests use standard `cargo test`
+- SDK tests live in `sdk/tests/` and use Jest + ts-jest (101 tests)
+- Contract tests live in `contracts/src/tests.rs`, run with `cargo test` (31 tests)
+- ⚠️ **`cargo test` on zero tests prints `test result: ok`.** The contract had no
+  tests at all until 2026-09-02 and reported success the whole time. Check the
+  count, not the colour — and the same goes for any suite you inherit.
+- The contract suite is mutation-checked: inverting the rule-priority tiers,
+  making `default_policy: Block` allow, or making the blocklist never match each
+  fail 3–4 tests. If you change consent logic and nothing goes red, the test
+  you need does not exist yet.
 - Router node has no automated tests yet (manual integration testing via curl)
 - All SDK tests mock CosmWasm and SpacetimeDB HTTP calls (no live chain required)
