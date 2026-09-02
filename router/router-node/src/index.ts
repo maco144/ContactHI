@@ -4,7 +4,7 @@ import { healthRouter } from './routes/health';
 import { sendRouter } from './routes/send';
 import { statusRouter } from './routes/status';
 import { rateLimitMiddleware } from './middleware/rateLimit';
-import { registerNode, startHeartbeat } from './services/spacetime';
+import { registerNode, startHeartbeat, startExpirySweep } from './services/spacetime';
 
 const app = express();
 
@@ -114,6 +114,7 @@ async function main() {
   }
 
   startHeartbeat();
+  startExpirySweep();
 
   app.listen(config.port, () => {
     console.log(`[startup] ContactHI router node "${config.node_id}" listening on port ${config.port}`);

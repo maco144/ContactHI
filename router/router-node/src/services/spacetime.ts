@@ -243,3 +243,33 @@ export function startHeartbeat(): void {
     }
   }, HEARTBEAT_INTERVAL_MS);
 }
+
+// ---------------------------------------------------------------------------
+// Background: periodic TTL sweep
+// ---------------------------------------------------------------------------
+
+const EXPIRY_SWEEP_INTERVAL_MS = 5 * 60_000; // every five minutes
+
+/**
+ * Run the module's `expire_messages` reducer.
+ *
+ * It marks TTL-elapsed acks `expired`, evicts stale preference-cache entries,
+ * and removes router nodes that have missed heartbeats for over five minutes.
+ * Nothing called it before — the reducer was defined and never invoked, so
+ * `send.ts`'s "ack will be reconciled by expire_messages" was never true: a
+ * failed delivery's ack stayed `pending` forever and dead nodes stayed in the
+ * federation table indefinitely.
+ */
+export async function expireMessages(): Promise<void> {
+  await callReducer('expire_messages', []);
+}
+
+export function startExpirySweep(): void {
+  setInterval(async () => {
+    try {
+      await expireMessages();
+    } catch (err) {
+      console.warn('[spacetime] Expiry sweep failed:', err);
+    }
+  }, EXPIRY_SWEEP_INTERVAL_MS);
+}

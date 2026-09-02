@@ -79,7 +79,7 @@ export class ReachClient {
    *
    * - Builds a CHI/1.0 envelope
    * - Signs it with the configured private key (if provided)
-   * - POSTs it to the router's /v1/messages endpoint
+   * - POSTs it to the router's /v1/send endpoint
    *
    * @returns message_id and initial status from the router
    * @throws ConfigError if sender_did is not configured
@@ -118,13 +118,14 @@ export class ReachClient {
       envelope = await signEnvelope(envelope, this.config.private_key)
     }
 
-    const res = await fetch(`${this.base_url}/v1/messages`, {
+    // protocol-spec.md §11: POST /v1/send, body IS the envelope — not wrapped.
+    const res = await fetch(`${this.base_url}/v1/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({ envelope }),
+      body: JSON.stringify(envelope),
     })
 
     if (!res.ok) {
@@ -213,8 +214,9 @@ export class ReachClient {
       throw new ReachError('INVALID_ENVELOPE', 'message_id is required')
     }
 
+    // protocol-spec.md §11: GET /v1/status/{message_id}
     const res = await fetch(
-      `${this.base_url}/v1/messages/${encodeURIComponent(message_id)}/status`,
+      `${this.base_url}/v1/status/${encodeURIComponent(message_id)}`,
       { headers: { Accept: 'application/json' } }
     )
 
@@ -227,8 +229,11 @@ export class ReachClient {
     return {
       message_id: data.message_id,
       status: data.status,
-      channel_used: data.channel_used,
-      timestamp: data.timestamp,
+      channel_used: data.channel_used ?? null,
+      delivered_at: data.delivered_at ?? null,
+      read_at: data.read_at ?? null,
+      responded_at: data.responded_at ?? null,
+      error: data.error ?? null,
     }
   }
 

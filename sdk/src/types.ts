@@ -154,9 +154,15 @@ export interface DeliveryAck {
   /** Current status of the message */
   status: MessageStatus
   /** Which channel was used to deliver */
-  channel_used?: Channel
-  /** ISO 8601 timestamp of this ack */
-  timestamp: string
+  channel_used?: Channel | null
+  /** When delivery completed — null until delivered */
+  delivered_at?: string | number | null
+  /** When the recipient read it — null until read */
+  read_at?: string | number | null
+  /** When the recipient responded — null until responded */
+  responded_at?: string | number | null
+  /** ErrorCode when status is `failed` or `expired`, else null */
+  error?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -183,24 +189,27 @@ export interface ReachClientConfig {
 // Router API shapes (internal)
 // ---------------------------------------------------------------------------
 
-/** POST /v1/messages — request body */
+/** POST /v1/send — request body (the bare envelope) */
 export interface RouterSendRequest {
   envelope: ReachMessage
 }
 
-/** POST /v1/messages — response body */
+/** POST /v1/send — response body */
 export interface RouterSendResponse {
   message_id: string
   status: MessageStatus
   router_timestamp: string
 }
 
-/** GET /v1/messages/:id/status — response body */
+/** GET /v1/status/:message_id — response body (protocol-spec.md §11) */
 export interface RouterStatusResponse {
   message_id: string
   status: MessageStatus
-  channel_used?: Channel
-  timestamp: string
+  channel_used?: Channel | null
+  delivered_at?: string | number | null
+  read_at?: string | number | null
+  responded_at?: string | number | null
+  error?: string | null
 }
 
 /** POST /v1/check-permission — request body */

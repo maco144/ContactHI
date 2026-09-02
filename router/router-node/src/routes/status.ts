@@ -37,7 +37,8 @@ statusRouter.get('/:message_id', async (req: Request, res: Response) => {
       delivered_at: ack.delivered_at,
       read_at: ack.read_at,
       responded_at: ack.responded_at,
-      error_code: ack.error_code,
+      // protocol-spec.md §11 names this field `error`, not `error_code`.
+      error: ack.error_code,
       updated_at: ack.updated_at,
     });
   } catch (err) {

@@ -66,7 +66,10 @@ function ack(
     message_id,
     status,
     channel_used: 'email',
-    timestamp: new Date().toISOString(),
+    delivered_at: Date.now(),
+    read_at: null,
+    responded_at: null,
+    error: null,
   }
 }
 
@@ -104,7 +107,7 @@ describe('ReachClient constructor', () => {
 // ---------------------------------------------------------------------------
 
 describe('ReachClient.send()', () => {
-  it('POSTs to /v1/messages with a valid envelope', async () => {
+  it('POSTs to /v1/send with a valid envelope', async () => {
     mockFetch.mockResolvedValue(
       jsonResponse({ message_id: 'msg-abc', status: 'pending', router_timestamp: new Date().toISOString() })
     )
@@ -117,12 +120,18 @@ describe('ReachClient.send()', () => {
     })
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${ROUTER_URL}/v1/messages`,
+      `${ROUTER_URL}/v1/send`,
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
       })
     )
+    // protocol-spec.md §11: the body IS the envelope. Wrapping it in
+    // `{ envelope }` is what shipped for six months and 404'd besides.
+    const sentBody = JSON.parse(mockFetch.mock.calls[0][1].body as string)
+    expect(sentBody.envelope).toBeUndefined()
+    expect(sentBody.chi).toBe('1.0')
+    expect(sentBody.recipient.did).toBe(RECIPIENT_DID)
     expect(result.message_id).toBe('msg-abc')
     expect(result.status).toBe('pending')
   })
@@ -136,9 +145,9 @@ describe('ReachClient.send()', () => {
     await client.send({ to: RECIPIENT_DID, intent: 'INFORM', content: 'Signed!' })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
-    expect(body.envelope.signature).toBeTruthy()
-    expect(typeof body.envelope.signature).toBe('string')
-    expect(body.envelope.signature.length).toBe(128)
+    expect(body.signature).toBeTruthy()
+    expect(typeof body.signature).toBe('string')
+    expect(body.signature.length).toBe(128)
   })
 
   it('does not attach signature when no private_key is configured', async () => {
@@ -150,7 +159,7 @@ describe('ReachClient.send()', () => {
     await client.send({ to: RECIPIENT_DID, intent: 'INFORM', content: 'Unsigned' })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
-    expect(body.envelope.signature).toBeUndefined()
+    expect(body.signature).toBeUndefined()
   })
 
   it('accepts a raw Cosmos address (non-DID) as recipient', async () => {
@@ -166,7 +175,7 @@ describe('ReachClient.send()', () => {
     })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
-    expect(body.envelope.recipient.did).toBe('did:chi:cosmos1recipient000000000000000000000')
+    expect(body.recipient.did).toBe('did:chi:cosmos1recipient000000000000000000000')
   })
 
   it('passes reply_to and priority through to the envelope', async () => {
@@ -184,8 +193,8 @@ describe('ReachClient.send()', () => {
     })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
-    expect(body.envelope.priority).toBe(3)
-    expect(body.envelope.reply_to).toBe('original-msg-id')
+    expect(body.priority).toBe(3)
+    expect(body.reply_to).toBe('original-msg-id')
   })
 
   it('throws ConfigError when sender_did is not configured', async () => {
@@ -330,7 +339,7 @@ describe('ReachClient.getStatus()', () => {
     const result = await client.getStatus('msg-id-1')
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${ROUTER_URL}/v1/messages/msg-id-1/status`,
+      `${ROUTER_URL}/v1/status/msg-id-1`,
       expect.objectContaining({ headers: { Accept: 'application/json' } })
     )
     expect(result.status).toBe('delivered')
