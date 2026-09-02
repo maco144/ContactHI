@@ -13,9 +13,9 @@ npm install @contacthi/sdk
 ```
 
 ```typescript
-import { ReachClient } from '@contacthi/sdk'
+import { ChiClient } from '@contacthi/sdk'
 
-const client = new ReachClient({
+const client = new ChiClient({
   router_url:    'https://router.chi.network',
   sender_did:    'did:chi:cosmos1youragentaddress',
   sender_type:   'AA',  // Autonomous Agent
@@ -25,13 +25,13 @@ const client = new ReachClient({
 // Check permission before sending
 const perm = await client.checkPermission({
   recipient: 'did:chi:cosmos1recipientaddress',
-  intent: 'INFORM',
+  intent: 'inform.shipping_update',
 })
 
 if (perm.allowed) {
   const { message_id } = await client.send({
     to:      'did:chi:cosmos1recipientaddress',
-    intent:  'INFORM',
+    intent:  'inform.shipping_update',
     content: 'Your order has shipped.',
   })
 
@@ -56,12 +56,12 @@ yarn add @contacthi/sdk
 
 ## API Reference
 
-### `new ReachClient(config)`
+### `new ChiClient(config)`
 
 Main SDK entry point.
 
 ```typescript
-const client = new ReachClient({
+const client = new ChiClient({
   router_url:        'https://router.chi.network',  // required
   sender_did:        'did:chi:cosmos1...',           // required for sending
   sender_type:       'AA',                           // default: 'US'
@@ -89,7 +89,7 @@ Send a message to a recipient DID.
 ```typescript
 const { message_id, status } = await client.send({
   to:           'did:chi:cosmos1recipient...',  // DID or raw Cosmos address
-  intent:       'INFORM',
+  intent:       'inform.shipping_update',
   content:      'Your package has shipped.',
   payload_type: 'text',                           // default: 'text'
   priority:     1,                                // 0–3, default: 1
@@ -117,7 +117,7 @@ Check whether you are allowed to send to a recipient before calling `send`.
 ```typescript
 const result = await client.checkPermission({
   recipient: 'did:chi:cosmos1...',
-  intent:    'COLLECT',
+  intent:    'collect.survey',
 })
 
 if (!result.allowed) {
@@ -185,7 +185,7 @@ await client.preferences.register({
   rules: [
     {
       sender_type:      'AA',       // Autonomous Agents
-      intent:           'INFORM',
+      intent:           'inform.shipping_update',
       allowed_channels: ['push', 'email'],
       rate_limit:       { count: 10, period: 'day' },
     },
@@ -211,7 +211,7 @@ await client.preferences.update({
 // Add a single rule
 await client.preferences.addRule({
   sender_type:      'CA',
-  intent:           'COLLECT',
+  intent:           'collect.survey',
   allowed_channels: [],  // deny all channels = effectively block this intent
 })
 
@@ -249,9 +249,9 @@ const theirPrefs = await client.preferences.get('did:chi:cosmos1other...')
 The recommended pattern for an agent sending a message:
 
 ```typescript
-import { ReachClient } from '@contacthi/sdk'
+import { ChiClient } from '@contacthi/sdk'
 
-const reach = new ReachClient({
+const reach = new ChiClient({
   router_url:  process.env.CHI_ROUTER_URL!,
   sender_did:  process.env.AGENT_DID!,
   sender_type: 'AA',
@@ -264,7 +264,7 @@ async function notify(recipient_did: string, message: string) {
   // 1. Check permission (on-chain, no gas needed)
   const perm = await reach.checkPermission({
     recipient: recipient_did,
-    intent: 'INFORM',
+    intent: 'inform.shipping_update',
   })
 
   if (!perm.allowed) {
@@ -275,7 +275,7 @@ async function notify(recipient_did: string, message: string) {
   // 2. Send via the preferred channels
   const { message_id } = await reach.send({
     to:      recipient_did,
-    intent:  'INFORM',
+    intent:  'inform.shipping_update',
     content: message,
   })
 
@@ -332,7 +332,7 @@ const envelope = createEnvelope({
   sender_did:    'did:chi:cosmos1sender...',
   sender_type:   'AA',
   recipient_did: 'did:chi:cosmos1recipient...',
-  intent:        'INFORM',
+  intent:        'inform.shipping_update',
   content:       'Hello.',
   priority:      1,
   ttl:           3600,
@@ -357,15 +357,15 @@ isExpired(envelope)  // false if within TTL
 
 ## Error Handling
 
-All errors extend `ReachError` and carry a machine-readable `code`:
+All errors extend `ChiError` and carry a machine-readable `code`:
 
 ```typescript
-import { ReachError, RouterError, TimeoutError, ConfigError } from '@contacthi/sdk'
+import { ChiError, RouterError, TimeoutError, ConfigError } from '@contacthi/sdk'
 
 try {
-  await client.send({ to: '...', intent: 'INFORM', content: '...' })
+  await client.send({ to: '...', intent: 'inform.shipping_update', content: '...' })
 } catch (e) {
-  if (e instanceof ReachError) {
+  if (e instanceof ChiError) {
     switch (e.code) {
       case 'PERMISSION_DENIED':    /* ... */ break
       case 'SENDER_BLOCKLISTED':   /* ... */ break

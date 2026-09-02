@@ -61,9 +61,9 @@ cd sdk && npm install && npm run build
 ```
 
 ```typescript
-import { ReachClient } from '@contacthi/sdk'
+import { ChiClient } from '@contacthi/sdk'
 
-const client = new ReachClient({
+const client = new ChiClient({
   router_url: 'https://router.chi.network',
   sender_did: 'did:chi:cosmos1...',
   sender_type: 'AA',                 // autonomous agent

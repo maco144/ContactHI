@@ -34,7 +34,7 @@ ContactHI/
 │       └── src/lib.rs            # Tables and reducers
 ├── sdk/                          # @contacthi/sdk (TypeScript)
 │   └── src/
-│       ├── client.ts             # ReachClient — main API
+│       ├── client.ts             # ChiClient — main API
 │       ├── envelope.ts           # Create/sign/verify CHI envelopes
 │       ├── preferences.ts        # PreferencesManager
 │       ├── did.ts                # DID utilities
@@ -90,7 +90,7 @@ Multi-channel delivery orchestration: agent-inbox (SpacetimeDB), push (FCM), SMS
 CHI envelope structural validation (version, DIDs, intent format, TTL, clock skew).
 
 ### sdk/src/client.ts
-`ReachClient` — main SDK class: `send()`, `checkPermission()`, `waitForAck()`, `preferences`.
+`ChiClient` — main SDK class: `send()`, `checkPermission()`, `waitForAck()`, `preferences`.
 
 ### sdk/src/envelope.ts
 `createEnvelope()`, `signEnvelope()` (Ed25519), `verifyEnvelope()`, `validateEnvelope()`, `isExpired()`.
@@ -152,7 +152,7 @@ every ungoverned grant is logged, and `/v1/health` reports
 
 | File | Coverage |
 |------|---------|
-| `sdk/tests/client.test.ts` | ReachClient — send, checkPermission, waitForAck |
+| `sdk/tests/client.test.ts` | ChiClient — send, checkPermission, waitForAck |
 | `sdk/tests/envelope.test.ts` | createEnvelope, signEnvelope, verifyEnvelope, validateEnvelope |
 | `sdk/tests/preferences.test.ts` | PreferencesManager — register, get, block/unblock |
 | `sdk/tests/setup.ts` | Jest global setup |
@@ -215,8 +215,8 @@ Agent                    Router Node              Registry (CosmWasm)
 
 ## 📝 Entity Types & Intents
 
-**EntityType**: `CA` (Corporate Agent), `LM` (Language Model), `GN` (Governance Node), `AA` (Autonomous Agent), `RB` (Robot), `DR` (Data Reporter), `VH` (Virtual Human), `US` (User), `CP` (Counterparty), `HS` (Human Sender), `Any`
+**EntityType** (`contracts/src/state.rs`, serialized verbatim): `CA` Conversational Agent, `LM` Language Model, `GN` Generative Model, `AA` Autonomous Agent, `RB` Robot, `DR` Drone, `VH` Vehicle, `US` Human User, `CP` Copilot, `HS` Hive/Swarm, plus `any` as the rule wildcard.
 
-**Intent format**: `namespace.action` (e.g., `inform.shipping_update`, `collect.survey`) or named constants: `Inform`, `Collect`, `Authorize`, `Escalate`, `Result`, `Any`
+**Intent**: `class.action` on the wire (e.g. `inform.shipping_update`). The class — `inform`, `collect`, `authorize`, `escalate`, `result` — is what the registry stores and matches rules against; the action is sender-defined. A router queries the chain with the class alone.
 
-**Channels**: `push`, `sms`, `email`, `webhook`, `in_app`, `agent_inbox`
+**Channels**: `push`, `sms`, `email`, `webhook`, `in-app`, `agent-inbox` (the contract serializes the last two as `in_app` / `agent_inbox`).

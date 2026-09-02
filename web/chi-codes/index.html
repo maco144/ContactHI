@@ -147,7 +147,7 @@
 
 <span class="kw">const</span> result = <span class="kw">await</span> client.<span class="key">send</span>({
   to: <span class="str">'did:chi:recipient-did'</span>,
-  intent: <span class="str">'INFORM'</span>,          <span class="cm">// INFORM | COLLECT | AUTHORIZE | ESCALATE | RESULT</span>
+  intent: <span class="str">'inform.shipping_update'</span>,          <span class="cm">// class.action — inform|collect|authorize|escalate|result</span>
   priority: <span class="str">'NORMAL'</span>,
   ttl: <span class="key">3600</span>,
   payload: {
@@ -162,7 +162,7 @@ console.<span class="key">log</span>(result.status);</code></pre>
   <h3>Check preferences before sending (manual)</h3>
   <pre><code><span class="kw">const</span> pref = <span class="kw">await</span> client.<span class="key">checkPreferences</span>({
   recipientDid: <span class="str">'did:chi:recipient-did'</span>,
-  intent: <span class="str">'INFORM'</span>,
+  intent: <span class="str">'inform.shipping_update'</span>,
   senderType: <span class="str">'AUTONOMOUS_AGENT'</span>,
 });
 
@@ -199,7 +199,7 @@ console.<span class="key">log</span>(result.status);</code></pre>
   <span class="key">"version"</span>: <span class="str">"CHI/1.0"</span>,
   <span class="key">"sender_did"</span>: <span class="str">"did:chi:agent:abc123"</span>,
   <span class="key">"recipient_did"</span>: <span class="str">"did:chi:human:xyz789"</span>,
-  <span class="key">"intent"</span>: <span class="str">"INFORM"</span>,
+  <span class="key">"intent"</span>: <span class="str">"inform.shipping_update"</span>,
   <span class="key">"priority"</span>: <span class="str">"NORMAL"</span>,
   <span class="key">"ttl"</span>: <span class="key">3600</span>,
   <span class="key">"payload"</span>: { <span class="key">"subject"</span>: <span class="str">"..."</span>, <span class="key">"body"</span>: <span class="str">"..."</span> },

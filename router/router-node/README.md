@@ -95,11 +95,11 @@ Submit a CHI/1.0 message envelope for delivery.
 ```json
 {
   "version": "1.0",
-  "message_id": "msg_01HZ4K8MNPQ2R3T7UVWXY",
+  "message_id": "3f2d9f9a-d69a-4794-8e2e-9da179a915a9",
   "sender_did": "did:chi:cosmoshub-4:cosmos1sendersaddress",
-  "sender_type": "human",
+  "sender_type": "US",
   "recipient_did": "did:chi:cosmoshub-4:cosmos1recipientaddress",
-  "intent": "message.send",
+  "intent": "inform.check_in",
   "priority": 128,
   "ttl_seconds": 3600,
   "payload_type": "text/plain",
@@ -115,9 +115,9 @@ Submit a CHI/1.0 message envelope for delivery.
 | `version` | `"1.0"` | yes | Protocol version. Must be `"1.0"`. |
 | `message_id` | string | yes | Globally unique message ID (UUID or ULID recommended) |
 | `sender_did` | string | yes | DID of the sender (must start with `did:`) |
-| `sender_type` | string | yes | Entity type: `human`, `agent`, `service`, `device`, or `dao` |
+| `sender_type` | string | yes | Entity Identity code: `CA`, `LM`, `GN`, `AA`, `RB`, `DR`, `VH`, `US`, `CP`, `HS` (spec §4.3) |
 | `recipient_did` | string | yes | DID of the recipient |
-| `intent` | string | yes | Namespaced intent: `namespace.action` (e.g. `message.send`, `payment.request`) |
+| `intent` | string | yes | `class.action`, where class ∈ `inform`, `collect`, `authorize`, `escalate`, `result` (e.g. `inform.shipping_update`) |
 | `priority` | integer | no | 0–255. Higher = more urgent. Default 128. |
 | `ttl_seconds` | integer | yes | Message time-to-live. Max 604800 (7 days). |
 | `payload_type` | string | yes | MIME-style descriptor: `text/plain`, `application/json`, etc. |
@@ -130,7 +130,7 @@ Submit a CHI/1.0 message envelope for delivery.
 `202 Accepted` — Message delivered:
 ```json
 {
-  "message_id": "msg_01HZ4K8MNPQ2R3T7UVWXY",
+  "message_id": "3f2d9f9a-d69a-4794-8e2e-9da179a915a9",
   "status": "delivered",
   "channel": "agent-inbox"
 }
@@ -139,7 +139,7 @@ Submit a CHI/1.0 message envelope for delivery.
 `202 Accepted` — Message accepted but delivery pending (retry via status endpoint):
 ```json
 {
-  "message_id": "msg_01HZ4K8MNPQ2R3T7UVWXY",
+  "message_id": "3f2d9f9a-d69a-4794-8e2e-9da179a915a9",
   "status": "pending",
   "note": "Message recorded; delivery will be retried",
   "delivery_error": "NO_FCM_TOKEN"
@@ -150,7 +150,7 @@ Submit a CHI/1.0 message envelope for delivery.
 ```json
 {
   "error": "INVALID_INTENT",
-  "message": "intent must match pattern \"namespace.action\" (e.g. \"message.send\")."
+  "message": "intent must match pattern \"namespace.action\" (e.g. \"inform.shipping_update\")."
 }
 ```
 
@@ -192,7 +192,7 @@ Poll the delivery status of a message. Reads from the SpacetimeDB `acks` table.
 
 ```json
 {
-  "message_id": "msg_01HZ4K8MNPQ2R3T7UVWXY",
+  "message_id": "3f2d9f9a-d69a-4794-8e2e-9da179a915a9",
   "status": "delivered",
   "channel_used": "push",
   "delivered_at": 1741651205000,

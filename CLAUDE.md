@@ -150,8 +150,8 @@ Router tries channels in the order declared in the recipient's preference rules.
 - `version` must be `"1.0"`
 - `message_id`, `sender_did`, `recipient_did`, `intent`, `payload`, `payload_type`, `created_at`, `ttl_seconds` — all required
 - DIDs must start with `"did:"`
-- `sender_type` ∈ `{human, agent, service, device, dao}`
-- `intent` format: `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`
+- `sender_type` ∈ Entity Identity codes `{CA, LM, GN, AA, RB, DR, VH, US, CP, HS}` — the on-chain vocabulary (spec §4.3)
+- `intent` format: `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`, and the namespace MUST be a registry Intent class (`inform|collect|authorize|escalate|result`) — an intent that cannot match a rule is rejected rather than silently dropped
 - `ttl_seconds`: 1–604800 (7 days)
 - `priority`: 0–255
 - Reject if message already expired or `created_at` > 5 minutes in future
@@ -180,9 +180,9 @@ Router tries channels in the order declared in the recipient's preference rules.
 ## SDK Usage Pattern
 
 ```typescript
-import { ReachClient } from '@contacthi/sdk'
+import { ChiClient } from '@contacthi/sdk'
 
-const client = new ReachClient({
+const client = new ChiClient({
   router_url: 'https://router.chi.network',
   sender_did: 'did:chi:cosmos1...',
   sender_type: 'AA',
@@ -192,7 +192,7 @@ const client = new ReachClient({
 // Always check permission before sending
 const perm = await client.checkPermission({
   recipient: 'did:chi:cosmos1recipient...',
-  intent: 'INFORM',
+  intent: 'inform.shipping_update',
 })
 if (!perm.allowed) return
 
@@ -210,9 +210,17 @@ const ack = await client.waitForAck(message_id, 60000)
 
 ## Protocol Version
 
-Current: **CHI/1.0 Draft** (dated 2026-03-11)
+Current: **CHI/1.0 Draft** (wire format settled 2026-09-02)
 
-Planned CHI/1.1 changes: mandatory envelope signatures.
+Planned CHI/1.1 changes: mandatory envelope signatures; removal of the deprecated
+`Reach*` SDK aliases.
+
+⚠️ **The envelope is flat and the vocabulary is the contract's.** Until 2026-09-02 the
+SDK emitted a nested envelope (`sender.did`, `chi`, `ttl`) with `INFORM`-style intents
+while the router expected flat fields with `human|agent|service` — no envelope the SDK
+produced could be accepted by any router. Field layout follows the router (it maps 1:1
+onto storage with no reshaping); vocabulary follows `contracts/src/state.rs`, because the
+registry decides consent and its serialization freezes on first instantiation.
 
 The canonical spec lives in `protocol-spec.md`. When in doubt about wire format, error codes, or semantics — that document is authoritative.
 
