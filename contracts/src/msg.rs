@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use crate::state::{Channel, DefaultPolicy, EntityType, Intent, PreferenceRule};
+use crate::state::{Channel, DefaultPolicy, EntityType, Intent, PreferenceRule, RateLimit};
 
 // ---------------------------------------------------------------------------
 // Instantiate
@@ -103,8 +103,15 @@ pub struct PermissionResponse {
     pub allowed_channels: Vec<Channel>,
     /// Human-readable reason when denied or rate-limited.
     pub reason: Option<String>,
-    /// Remaining calls allowed in the current rate-limit window, if applicable.
-    pub rate_limit_remaining: Option<u32>,
+    /// The rate-limit policy on the rule that matched, when it has one.
+    ///
+    /// The registry reports the human's declared policy; it does not enforce it.
+    /// Enforcement needs a count of messages actually delivered, and the chain
+    /// never sees a delivery — it would need a transaction per message, putting
+    /// gas and a funded key in the delivery hot path. The router already holds
+    /// that history in SpacetimeDB, so it counts and refuses. The consent record
+    /// stays on-chain where it belongs; the accounting happens where the data is.
+    pub rate_limit: Option<RateLimit>,
 }
 
 #[cw_serde]

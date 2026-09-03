@@ -759,14 +759,16 @@
             "$ref": "#/definitions/Channel"
           }
         },
-        "rate_limit_remaining": {
-          "description": "Remaining calls allowed in the current rate-limit window, if applicable.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0.0
+        "rate_limit": {
+          "description": "The rate-limit policy on the rule that matched, when it has one.\n\nThe registry reports the human's declared policy; it does not enforce it. Enforcement needs a count of messages actually delivered, and the chain never sees a delivery — it would need a transaction per message, putting gas and a funded key in the delivery hot path. The router already holds that history in SpacetimeDB, so it counts and refuses. The consent record stays on-chain where it belongs; the accounting happens where the data is.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RateLimit"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "reason": {
           "description": "Human-readable reason when denied or rate-limited.",
@@ -789,6 +791,29 @@
             "in_app",
             "agent_inbox"
           ]
+        },
+        "RateLimit": {
+          "description": "Per-period rate limit.",
+          "type": "object",
+          "required": [
+            "count",
+            "period_seconds"
+          ],
+          "properties": {
+            "count": {
+              "description": "Maximum number of messages permitted within `period_seconds`.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "period_seconds": {
+              "description": "Rolling window size in seconds (e.g. 86400 for one day).",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
         }
       }
     },

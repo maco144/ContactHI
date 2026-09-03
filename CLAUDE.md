@@ -129,6 +129,24 @@ contract is the open item.**
   in `spacetime.ts` must match the reducer signature in `lib.rs`** — nothing checks this
   for you.
 
+### Rate Limits: Declared On-Chain, Enforced by the Router
+The registry stores `PreferenceRule.rate_limit` — that is the human's consent
+record. It cannot enforce it: enforcement needs a count of delivered messages,
+and the chain never sees a delivery. Putting one there means a transaction per
+message, gas and a funded key in the hot path, and a limiter that fails when the
+chain is slow.
+
+`check_permission` therefore returns the matched rule's **policy**, and
+`services/rateLimit.ts` counts against the SpacetimeDB `messages` table, which
+the router already writes. `/v1/send` and `/v1/check-permission` share one code
+path so they cannot drift into disagreeing. The check runs **before** the
+message is recorded, so a refusal does not consume the sender's own allowance.
+
+🔴 Until 2026-09-02 the contract had a `RATE_COUNTS` map that no execute path
+ever wrote. The ceiling was unreachable, so every configured limit passed
+everything. `increment_rate_count` even documented itself as "called from
+execute handlers" and was called by nothing.
+
 ### Delivery Channel Ordering
 Router tries channels in the order declared in the recipient's preference rules. First success wins. `agent_inbox` (SpacetimeDB write) is the default fallback.
 

@@ -60,19 +60,27 @@ export interface HumanPreferences {
   updated_at: number;
 }
 
+/** A rate-limit policy as the contract declares it. */
+export interface RateLimitPolicy {
+  count: number;
+  period_seconds: number;
+}
+
 /** `PermissionResponse` from the contract. */
 interface ChainPermissionResponse {
   allowed: boolean;
   allowed_channels: ChainChannel[];
   reason?: string | null;
-  rate_limit_remaining?: number | null;
+  /** The matched rule's declared policy. The chain reports; the router enforces. */
+  rate_limit?: RateLimitPolicy | null;
 }
 
 export interface PermissionResult {
   granted: boolean;
   reason: string;
   allowed_channels?: string[];
-  rate_limit_remaining?: number;
+  /** Declared policy on the matched rule, for the caller to enforce. */
+  rate_limit?: RateLimitPolicy;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,9 +254,7 @@ export async function checkPermission(
         granted: true,
         reason: response.reason ?? 'RULE_MATCH',
         allowed_channels: mapChannels(response.allowed_channels),
-        ...(response.rate_limit_remaining != null
-          ? { rate_limit_remaining: response.rate_limit_remaining }
-          : {}),
+        ...(response.rate_limit ? { rate_limit: response.rate_limit } : {}),
       }
     : {
         granted: false,

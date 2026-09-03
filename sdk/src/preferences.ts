@@ -299,7 +299,9 @@ export class PreferencesManager {
       allowed: response.allowed,
       allowed_channels: response.allowed_channels,
       reason: response.reason ?? undefined,
-      rate_limit_remaining: response.rate_limit_remaining ?? undefined,
+      // The chain reports the policy but cannot count deliveries, so there is
+      // no honest `rate_limit_remaining` to give here — ask a router for that.
+      rate_limit: response.rate_limit ?? undefined,
     }
   }
 

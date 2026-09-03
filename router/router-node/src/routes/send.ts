@@ -4,6 +4,7 @@ import { checkPermission, getPreferences } from '../services/registry';
 import { checkSender } from '../services/nullcone';
 import { submitMessage, updateAck } from '../services/spacetime';
 import { deliver, Channel } from '../services/delivery';
+import { enforceRateLimit } from '../services/rateLimit';
 
 export const sendRouter = Router();
 
@@ -55,6 +56,26 @@ sendRouter.post('/', validateEnvelope, async (req: Request, res: Response) => {
     return res.status(403).json({
       error: 'PERMISSION_DENIED',
       reason: permissionResult.reason,
+      message_id,
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Step 5b: Rate limit declared by the matched rule
+  //
+  // Checked before the message is written, so a refused send leaves no row —
+  // otherwise the refusal would itself count against the sender's next window.
+  // ------------------------------------------------------------------
+  const rate = await enforceRateLimit(permissionResult, sender_did, recipient_did);
+  if (!rate.allowed) {
+    console.log(
+      `[send] RATE_LIMITED message_id=${message_id} sender=${sender_did} limit=${rate.limit}`
+    );
+    return res.status(429).json({
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: `Recipient permits ${rate.limit} message(s) from you in this window.`,
+      rate_limit: rate.limit,
+      rate_limit_remaining: 0,
       message_id,
     });
   }

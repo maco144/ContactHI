@@ -170,6 +170,14 @@ export interface HumanPreferences {
 // Permission / delivery
 // ---------------------------------------------------------------------------
 
+/** A rate-limit policy as declared on-chain by the recipient. */
+export interface RateLimitPolicy {
+  /** Maximum messages permitted within `period_seconds` */
+  count: number
+  /** Fixed window size in seconds */
+  period_seconds: number
+}
+
 /** Result of a permission check */
 export interface PermissionResult {
   /** Whether the sender is allowed to contact this recipient */
@@ -178,7 +186,16 @@ export interface PermissionResult {
   allowed_channels: Channel[]
   /** Machine or human-readable explanation */
   reason?: string
-  /** Remaining sends allowed in the current rate-limit window */
+  /**
+   * The rate-limit policy on the matched rule, when one applies.
+   *
+   * The registry declares this; it cannot enforce it, because enforcement needs
+   * a count of delivered messages and the chain never sees a delivery. A router
+   * counts against its own history — so `rate_limit_remaining` is present when
+   * you ask a router, and absent when you query the chain directly.
+   */
+  rate_limit?: RateLimitPolicy
+  /** Remaining sends in the current window. Router-answered checks only. */
   rate_limit_remaining?: number
 }
 
@@ -258,6 +275,7 @@ export interface RouterPermissionResponse {
   allowed: boolean
   allowed_channels: Channel[]
   reason?: string
+  rate_limit?: number
   rate_limit_remaining?: number
 }
 
@@ -276,5 +294,6 @@ export interface ChainPermissionResponse {
   allowed: boolean
   allowed_channels: Channel[]
   reason: string | null
-  rate_limit_remaining: number | null
+  /** The matched rule's declared policy; the chain reports, routers enforce. */
+  rate_limit: RateLimitPolicy | null
 }

@@ -160,9 +160,11 @@ pub const PREFERENCES: Map<&Addr, HumanPreference> = Map::new("preferences");
 /// Key is a composite of the owner address bytes and the raw pattern string.
 pub const BLOCKLIST: Map<(&Addr, &str), bool> = Map::new("blocklist");
 
-/// Rate-limit counters: (recipient, sender, period_key) -> message count in window.
-/// `period_key` encodes the rolling window start (e.g. "<period_seconds>:<window_start>").
-pub const RATE_COUNTS: Map<(&Addr, &Addr, &str), u32> = Map::new("rate_counts");
+// There is deliberately no rate-limit counter here. One existed and was never
+// written by any execute path, so the ceiling was unreachable and the limit
+// decorative. Rate limits are DECLARED on-chain in `PreferenceRule::rate_limit`
+// — that is the consent record — and ENFORCED by the router against its own
+// delivery history. See `PermissionResponse::rate_limit`.
 
 /// Contract metadata key (stored by cw2).
 pub const CONTRACT_NAME: &str = "contacthi-contracts:preference-registry";

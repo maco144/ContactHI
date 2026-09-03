@@ -9,7 +9,7 @@
 //! of what follows exercises that ladder and the deny paths around it.
 
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-use cosmwasm_std::{from_json, Addr, Timestamp};
+use cosmwasm_std::{from_json, Timestamp};
 
 use crate::contract::{execute, instantiate, query, MAX_RULES};
 use crate::error::ContractError;
@@ -684,7 +684,7 @@ fn a_window_that_wraps_midnight_covers_both_sides_of_it() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn a_rate_limited_rule_reports_its_remaining_allowance() {
+fn a_matched_rule_reports_its_rate_limit_policy_to_the_router() {
     let mut r = rule(EntityType::Any, Intent::Any, vec![Channel::Push]);
     r.rate_limit = Some(RateLimit {
         count: 3,
@@ -694,75 +694,36 @@ fn a_rate_limited_rule_reports_its_remaining_allowance() {
 
     let res = ask(deps.as_ref(), EntityType::AA, Intent::Inform);
     assert!(res.allowed);
-    // 3 permitted, none counted yet, 1 being evaluated → 2 left after this one.
-    assert_eq!(res.rate_limit_remaining, Some(2));
+    // The registry declares the policy; the router counts and refuses.
+    let policy = res.rate_limit.expect("matched rule carries a rate limit");
+    assert_eq!(policy.count, 3);
+    assert_eq!(policy.period_seconds, 86_400);
 }
 
 #[test]
-fn a_rate_limit_actually_stops_the_sender_once_it_is_reached() {
-    // This is the test the contract is expected to fail today: nothing in the
-    // contract calls `increment_rate_count`, so RATE_COUNTS is never written and
-    // the ceiling can never be reached. A rate limit a human configures and the
-    // registry never enforces is worse than no rate limit at all — it is a
-    // promise in the UI with nothing behind it.
-    let mut r = rule(EntityType::Any, Intent::Any, vec![Channel::Push]);
-    r.rate_limit = Some(RateLimit {
-        count: 2,
-        period_seconds: 86_400,
-    });
-    let mut deps = setup(vec![r], DefaultPolicy::Block);
-
-    // Burn the allowance by recording sends, as a router would after delivery.
-    let env = mock_env();
-    for _ in 0..2 {
-        crate::helpers::increment_rate_count(
-            deps.as_mut().storage,
-            &env,
-            &Addr::unchecked(HUMAN),
-            SENDER_DID,
-            86_400,
-        )
-        .unwrap();
-    }
-
-    let res = ask_as(
-        deps.as_ref(),
-        env,
-        SENDER_DID,
-        EntityType::AA,
-        Intent::Inform,
+fn a_rule_without_a_rate_limit_reports_none() {
+    let deps = setup(
+        vec![rule(EntityType::Any, Intent::Any, vec![Channel::Push])],
+        DefaultPolicy::Block,
     );
-    assert!(
-        !res.allowed,
-        "a sender at its configured limit must be refused"
-    );
-    assert_eq!(res.reason.as_deref(), Some("RATE_LIMIT_EXCEEDED"));
-    assert_eq!(res.rate_limit_remaining, Some(0));
+    let res = ask(deps.as_ref(), EntityType::AA, Intent::Inform);
+    assert!(res.allowed);
+    assert!(res.rate_limit.is_none());
 }
 
 #[test]
-fn rate_limit_windows_are_independent() {
-    let mut r = rule(EntityType::Any, Intent::Any, vec![Channel::Push]);
+fn a_denied_decision_carries_no_rate_limit_policy() {
+    let mut r = rule(EntityType::AA, Intent::Inform, vec![Channel::Push]);
     r.rate_limit = Some(RateLimit {
         count: 1,
-        period_seconds: 3_600,
+        period_seconds: 60,
     });
-    let mut deps = setup(vec![r], DefaultPolicy::Block);
+    let deps = setup(vec![r], DefaultPolicy::Block);
 
-    let first = env_at(1, 0);
-    crate::helpers::increment_rate_count(
-        deps.as_mut().storage,
-        &first,
-        &Addr::unchecked(HUMAN),
-        SENDER_DID,
-        3_600,
-    )
-    .unwrap();
-    assert!(!ask_as(deps.as_ref(), first, SENDER_DID, EntityType::AA, Intent::Inform).allowed);
-
-    // Next hour is a fresh window.
-    let later = env_at(3, 0);
-    assert!(ask_as(deps.as_ref(), later, SENDER_DID, EntityType::AA, Intent::Inform).allowed);
+    // No rule matches LM+Escalate, so there is no policy to report.
+    let res = ask(deps.as_ref(), EntityType::LM, Intent::Escalate);
+    assert!(!res.allowed);
+    assert!(res.rate_limit.is_none());
 }
 
 // ---------------------------------------------------------------------------

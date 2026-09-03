@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { checkPermission } from '../services/registry';
+import { checkPermissionWithRateLimit } from '../services/rateLimit';
 
 export const checkPermissionRouter = Router();
 
@@ -34,13 +34,23 @@ checkPermissionRouter.post('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await checkPermission(sender_did, sender_type, recipient_did, intent);
+    const { permission, rate } = await checkPermissionWithRateLimit(
+      sender_did,
+      sender_type,
+      recipient_did,
+      intent
+    );
+
+    // A sender at its ceiling is not allowed to send right now, and saying
+    // otherwise here only to refuse at /v1/send would be the worse answer.
+    const allowed = permission.granted && rate.allowed;
+
     return res.status(200).json({
-      allowed: result.granted,
-      allowed_channels: result.allowed_channels ?? [],
-      reason: result.reason,
-      ...(result.rate_limit_remaining != null
-        ? { rate_limit_remaining: result.rate_limit_remaining }
+      allowed,
+      allowed_channels: allowed ? permission.allowed_channels ?? [] : [],
+      reason: rate.allowed ? permission.reason : 'RATE_LIMIT_EXCEEDED',
+      ...(rate.limit != null
+        ? { rate_limit: rate.limit, rate_limit_remaining: rate.remaining ?? 0 }
         : {}),
     });
   } catch (err) {

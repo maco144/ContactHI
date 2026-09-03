@@ -191,6 +191,36 @@ export async function getAck(message_id: string): Promise<SpacetimeAck | null> {
 }
 
 /**
+ * Count messages this sender has already had accepted for this recipient inside
+ * the current fixed rate-limit window.
+ *
+ * The registry declares the human's rate-limit policy but cannot enforce it —
+ * enforcement needs a count of real deliveries, and the chain never sees one.
+ * The router does: every accepted message is already a row in `messages`.
+ *
+ * Windows are fixed, not rolling: `floor(now / period) * period`. A rolling
+ * window would need a per-sender history scan on every send; a fixed window is
+ * one indexed count, and the difference only matters at the boundary.
+ */
+export async function countMessagesInWindow(
+  sender_did: string,
+  recipient_did: string,
+  periodSeconds: number
+): Promise<number> {
+  const periodMs = periodSeconds * 1_000;
+  const windowStart = Math.floor(Date.now() / periodMs) * periodMs;
+
+  const esc = (v: string) => v.replace(/'/g, "''");
+  const rows = await querySql<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM messages ` +
+      `WHERE sender_did = '${esc(sender_did)}' ` +
+      `AND recipient_did = '${esc(recipient_did)}' ` +
+      `AND created_at >= ${windowStart}`
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/**
  * Register this router node with SpacetimeDB.
  * Called on startup and periodically as a heartbeat.
  */

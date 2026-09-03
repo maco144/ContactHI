@@ -368,7 +368,7 @@ describe('PreferencesManager.checkPermission()', () => {
       allowed: true,
       allowed_channels: ['email'],
       reason: null,
-      rate_limit_remaining: 100,
+      rate_limit: { count: 100, period_seconds: 86_400 },
     })
     const mgr = makeManagerWithChain()
 
@@ -388,7 +388,11 @@ describe('PreferencesManager.checkPermission()', () => {
     })
     expect(result.allowed).toBe(true)
     expect(result.allowed_channels).toEqual(['email'])
-    expect(result.rate_limit_remaining).toBe(100)
+    // The chain declares the policy...
+    expect(result.rate_limit).toEqual({ count: 100, period_seconds: 86_400 })
+    // ...and cannot say how much is left, because it never sees a delivery.
+    // A router answers that; claiming a number here would be inventing one.
+    expect(result.rate_limit_remaining).toBeUndefined()
   })
 
   it('falls back to router HTTP when no chain config', async () => {

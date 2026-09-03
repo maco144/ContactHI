@@ -73,6 +73,7 @@ export type {
   HumanPreferences,
   // Results
   PermissionResult,
+  RateLimitPolicy,
   DeliveryAck,
   // Config
   ChiClientConfig,

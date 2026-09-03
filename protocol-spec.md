@@ -425,10 +425,10 @@ pub struct CheckPermissionQuery {
 
 pub struct PermissionResult {
     pub allowed: bool,
-    pub channels: Vec<ChannelType>,
-    pub rate_limit_remaining: Option<u32>,
-    pub next_window_open: Option<u64>,  // Unix timestamp if time-gated
-    pub deny_reason: Option<DenyReason>,
+    pub allowed_channels: Vec<Channel>,
+    pub reason: Option<String>,
+    /// The matched rule's declared rate-limit policy, if it has one.
+    pub rate_limit: Option<RateLimit>,
 }
 
 pub enum DenyReason {
@@ -454,6 +454,19 @@ pub struct ChannelsResult {
 ```
 
 Routers call `get_channels` after `check_permission` returns `allowed: true` to retrieve the human's registered channel endpoints.
+
+#### Where rate limits are enforced
+
+The registry **declares** a rate limit and does not enforce it. Enforcement requires counting messages that were actually delivered, and the chain never observes a delivery — it would need a transaction per message, putting gas and a funded key in the delivery hot path and producing a limiter that fails whenever the chain is slow.
+
+So the split is:
+
+- **The registry owns the policy.** `PreferenceRule.rate_limit` is part of the consent record: it is what the human declared, it is signed, and it is publicly auditable.
+- **The router owns the count.** Every accepted message is already recorded in the router's federation store, so the count is one indexed query against data it already holds. The router returns `rate_limit_remaining`; the chain never does.
+
+A router MUST evaluate the limit **before** recording the message, so a refused send does not consume the sender's own allowance. Windows are fixed — `floor(now / period) * period` — not rolling; a rolling window costs a per-sender history scan on every send, and the two differ only at the boundary.
+
+⚠️ **This was not always true.** Through 2026-09-02 the contract carried a rate-limit counter that no execute path ever wrote, so the ceiling was unreachable and every configured limit passed everything silently. A limit a human sets and the system never applies is worse than no limit offered at all: it is a promise in the interface with nothing behind it.
 
 ### 5.5 Execute Interface
 

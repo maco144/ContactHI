@@ -2,7 +2,6 @@ use cosmwasm_std::{Addr, Deps, Env, StdResult};
 
 use crate::state::{
     DefaultPolicy, EntityType, HumanPreference, Intent, PreferenceRule, BLOCKLIST, PREFERENCES,
-    RATE_COUNTS,
 };
 use crate::msg::PermissionResponse;
 
@@ -20,7 +19,7 @@ use crate::msg::PermissionResponse;
 /// 4. If no rule found, apply `default_policy`.
 /// 5. If the rule exists but `sender_did` is in the rule's per-rule blocklist, deny.
 /// 6. Check time window (if set).
-/// 7. Check rate limit (if set).
+/// 7. Report the rule's rate-limit policy (enforced by the router).
 /// 8. Return `PermissionResponse`.
 pub fn check_permission(
     deps: Deps,
@@ -38,7 +37,7 @@ pub fn check_permission(
                 allowed: false,
                 allowed_channels: vec![],
                 reason: Some("RECIPIENT_NOT_FOUND".to_string()),
-                rate_limit_remaining: None,
+                rate_limit: None,
             });
         }
     };
@@ -49,7 +48,7 @@ pub fn check_permission(
             allowed: false,
             allowed_channels: vec![],
             reason: Some("SENDER_GLOBALLY_BLOCKED".to_string()),
-            rate_limit_remaining: None,
+            rate_limit: None,
         });
     }
 
@@ -68,7 +67,7 @@ pub fn check_permission(
                 } else {
                     Some("NO_MATCHING_RULE_DEFAULT_BLOCK".to_string())
                 },
-                rate_limit_remaining: None,
+                rate_limit: None,
             });
         }
         Some(r) => r,
@@ -80,7 +79,7 @@ pub fn check_permission(
             allowed: false,
             allowed_channels: vec![],
             reason: Some("SENDER_RULE_BLOCKED".to_string()),
-            rate_limit_remaining: None,
+            rate_limit: None,
         });
     }
 
@@ -91,39 +90,17 @@ pub fn check_permission(
                 allowed: false,
                 allowed_channels: vec![],
                 reason: Some("OUTSIDE_TIME_WINDOW".to_string()),
-                rate_limit_remaining: None,
+                rate_limit: None,
             });
         }
     }
 
-    // 7. Rate limit check
-    let rate_limit_remaining = if let Some(ref rl) = rule.rate_limit {
-        let (remaining, allowed) = check_rate_limit(
-            deps,
-            env,
-            recipient,
-            sender_did,
-            rl.count,
-            rl.period_seconds,
-        )?;
-        if !allowed {
-            return Ok(PermissionResponse {
-                allowed: false,
-                allowed_channels: vec![],
-                reason: Some("RATE_LIMIT_EXCEEDED".to_string()),
-                rate_limit_remaining: Some(0),
-            });
-        }
-        Some(remaining)
-    } else {
-        None
-    };
-
+    // 7. Report the rule's rate-limit policy for the router to enforce.
     Ok(PermissionResponse {
         allowed: true,
         allowed_channels: rule.allowed_channels.clone(),
         reason: None,
-        rate_limit_remaining,
+        rate_limit: rule.rate_limit.clone(),
     })
 }
 
@@ -250,69 +227,6 @@ fn is_within_time_window(env: &Env, window: &crate::state::TimeWindow) -> bool {
         // Wraps midnight: e.g. 22:00–06:00
         secs_today >= start_secs || secs_today < end_secs
     }
-}
-
-// ---------------------------------------------------------------------------
-// Rate limiting
-// ---------------------------------------------------------------------------
-
-/// Returns `(remaining, is_allowed)`.
-/// Uses a fixed-window strategy keyed on `floor(now / period_seconds)`.
-fn check_rate_limit(
-    deps: Deps,
-    env: &Env,
-    recipient: &Addr,
-    sender_did: &str,
-    limit: u32,
-    period_seconds: u64,
-) -> StdResult<(u32, bool)> {
-    let now = env.block.time.seconds();
-    let window_id = now / period_seconds;
-    let period_key = format!("{}:{}", period_seconds, window_id);
-
-    // We need a stable Addr for the sender to use as a Map key.
-    // If sender_did is a valid bech32, use it; otherwise treat it as a raw string key
-    // embedded in the period_key (no secondary address validation needed here —
-    // counting is best-effort keyed on the raw DID string).
-    let sender_key_str = format!("{}:{}", sender_did, period_key);
-    // Use a synthetic Addr (unchecked) for the Map composite key.
-    let sender_addr = Addr::unchecked(sender_did);
-    let full_period_key = format!("{}:{}", period_seconds, window_id);
-
-    let current_count = RATE_COUNTS
-        .may_load(deps.storage, (recipient, &sender_addr, &full_period_key))?
-        .unwrap_or(0);
-
-    // Suppress unused variable warning from the earlier binding.
-    let _ = sender_key_str;
-
-    if current_count >= limit {
-        Ok((0, false))
-    } else {
-        let remaining = limit - current_count - 1; // -1 for the message being evaluated
-        Ok((remaining, true))
-    }
-}
-
-/// Increment the rate-limit counter for a sender→recipient pair.
-/// Called from execute handlers after a message is approved.
-pub fn increment_rate_count(
-    storage: &mut dyn cosmwasm_std::Storage,
-    env: &Env,
-    recipient: &Addr,
-    sender_did: &str,
-    period_seconds: u64,
-) -> StdResult<()> {
-    let now = env.block.time.seconds();
-    let window_id = now / period_seconds;
-    let period_key = format!("{}:{}", period_seconds, window_id);
-    let sender_addr = Addr::unchecked(sender_did);
-
-    let count = RATE_COUNTS
-        .may_load(storage, (recipient, &sender_addr, &period_key))?
-        .unwrap_or(0);
-    RATE_COUNTS.save(storage, (recipient, &sender_addr, &period_key), &(count + 1))?;
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
