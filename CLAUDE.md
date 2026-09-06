@@ -139,8 +139,16 @@ chain is slow.
 `check_permission` therefore returns the matched rule's **policy**, and
 `services/rateLimit.ts` counts against the SpacetimeDB `messages` table, which
 the router already writes. `/v1/send` and `/v1/check-permission` share one code
-path so they cannot drift into disagreeing. The check runs **before** the
-message is recorded, so a refusal does not consume the sender's own allowance.
+path (`checkPermissionWithRateLimit`) so they cannot drift into disagreeing. The
+check runs **before** the message is recorded, so a refusal does not consume the
+sender's own allowance. It **fails open** when SpacetimeDB is unreachable — a
+storage outage must not silently become a total delivery block.
+
+`client.checkPermission()` forks on config: with `cosmos_rpc` **and**
+`registry_address` set it queries the chain directly, otherwise it asks the router.
+Only the router counts deliveries, so `rate_limit_remaining` comes back on
+router-answered checks and is absent from chain-answered ones — the chain reports
+the declared policy in `rate_limit` and nothing more.
 
 🔴 Until 2026-09-02 the contract had a `RATE_COUNTS` map that no execute path
 ever wrote. The ceiling was unreachable, so every configured limit passed
@@ -157,9 +165,19 @@ Router tries channels in the order declared in the recipient's preference rules.
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/v1/send` | Submit CHI envelope |
+| `POST` | `/v1/check-permission` | Dry-run the consent + rate-limit decision |
 | `GET` | `/v1/status/:message_id` | Poll delivery status |
 | `GET` | `/v1/health` | Node health + capabilities |
 | `GET` | `/` | Root info page |
+
+`/v1/check-permission` takes `{sender_did, sender_type, recipient_did, intent}` and
+answers `{allowed, allowed_channels, reason, rate_limit?, rate_limit_remaining?}`. A
+sender at its ceiling comes back `allowed: false` with `reason:
+'RATE_LIMIT_EXCEEDED'` — saying otherwise here only to refuse at `/v1/send` is the
+worse answer. 503 `REGISTRY_UNAVAILABLE` when the decision cannot be evaluated.
+
+⚠️ The SDK has called this endpoint since it was written; the router did not serve it
+until 2026-09-02, so every `client.checkPermission()` aimed at a router 404'd.
 
 ---
 
