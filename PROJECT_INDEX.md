@@ -1,6 +1,6 @@
 # Project Index: ContactHI
 
-Generated: 2026-09-01
+Generated: 2026-09-06
 
 ## Overview
 
@@ -21,15 +21,17 @@ ContactHI/
 │       ├── msg.rs                # Message types (Execute, Query)
 │       ├── state.rs              # Data models & storage
 │       ├── error.rs              # Error types
-│       └── helpers.rs            # Utility functions
+│       ├── helpers.rs            # Utility functions
+│       ├── tests.rs              # Consent-boundary suite (31 tests)
+│       └── bin/schema.rs         # JSON schema generator → contracts/schema/
 ├── router/
 │   ├── router-node/              # Reference router (TypeScript/Express)
 │   │   └── src/
 │   │       ├── index.ts          # Server entry point
 │   │       ├── config.ts         # Environment config
-│   │       ├── routes/           # HTTP endpoints
-│   │       ├── middleware/       # Validation + rate limiting
-│   │       └── services/         # Registry, delivery, SpacetimeDB, Nullcone
+│   │       ├── routes/           # send, status, health, check-permission
+│   │       ├── middleware/       # Envelope validation + per-IP rate limiting
+│   │       └── services/         # registry, delivery, rateLimit, spacetime, nullcone
 │   └── spacetimedb-module/       # SpacetimeDB reducer module (Rust, 2.0.4)
 │       └── src/lib.rs            # Tables and reducers
 ├── sdk/                          # @contacthi/sdk (TypeScript)
@@ -74,6 +76,12 @@ CosmWasm smart contract handling on-chain preference registration.
 - **Execute**: `RegisterPreferences`, `UpdatePreferences`, `AddRule`, `RemoveRule`, `BlockSender`, `UnblockSender`
 - **Query**: `CheckPermission`, `GetPreferences`, `IsBlocked`
 - Rule priority: exact sender_type+intent → exact sender_type+Any → Any+exact intent → Any+Any → default_policy
+- `CheckPermission` returns the matched rule's **`rate_limit` policy**, not a remaining
+  count. The registry declares the ceiling — that is a consent decision — but cannot
+  enforce it: enforcement needs a count of delivered messages and the chain never sees a
+  delivery. A `RATE_COUNTS` map existed until 2026-09-02 that no execute path ever wrote,
+  so every configured limit passed everything; `state.rs` now carries a comment where it
+  used to be so it is not reintroduced.
 
 ### router/router-node/src/routes/send.ts
 `POST /v1/send` — Primary message submission endpoint.
@@ -82,6 +90,20 @@ CosmWasm smart contract handling on-chain preference registration.
 
 ### router/router-node/src/services/registry.ts
 Queries CosmWasm preference registry to check if sender is allowed to contact recipient.
+
+### router/router-node/src/services/rateLimit.ts
+Where declared rate limits are actually enforced. `enforceRateLimit()` counts rows in the
+SpacetimeDB `messages` table against the policy the registry returned;
+`checkPermissionWithRateLimit()` is the single code path shared by `/v1/send` and
+`/v1/check-permission`, so the two cannot drift into disagreeing. The check runs **before**
+the message is recorded, so a refusal does not consume the sender's own allowance. **Fails
+open** when SpacetimeDB is unreachable — a storage outage must not become a total delivery
+block.
+
+### router/router-node/src/routes/checkPermission.ts
+`POST /v1/check-permission` — ask the router whether a send would be accepted, without
+sending. The SDK has called this since it was written; the router did not serve it until
+2026-09-02, so `client.checkPermission()` against a router 404'd.
 
 ### router/router-node/src/services/delivery.ts
 Multi-channel delivery orchestration: agent-inbox (SpacetimeDB), push (FCM), SMS (Twilio), email (SMTP), webhook.
@@ -111,6 +133,22 @@ keep the two in step when changing a signature.
 Add a provider by implementing the interface under `src/detection/adapters/`, registering
 it in `src/background/service-worker.ts`, and listing it in `PROVIDERS` in
 `src/options/options.ts`.
+
+---
+
+## 🌐 Router API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/v1/send` | Submit a CHI envelope |
+| `POST` | `/v1/check-permission` | Dry-run the consent + rate-limit decision |
+| `GET` | `/v1/status/:message_id` | Poll delivery status |
+| `GET` | `/v1/health` | Liveness + capabilities (**not** a dependency check) |
+| `GET` | `/` | Root info page |
+
+⚠️ A 200 from `/v1/health` means the process is up and nothing more — it touches neither
+SpacetimeDB nor the registry. Smoke-test the real path instead: `POST /v1/send` →
+`202 delivered` → `GET /v1/status/{id}` → `delivered` with a non-null `channel_used`.
 
 ---
 
@@ -150,12 +188,21 @@ every ungoverned grant is logged, and `/v1/health` reports
 
 ## 🧪 Tests
 
-| File | Coverage |
-|------|---------|
-| `sdk/tests/client.test.ts` | ChiClient — send, checkPermission, waitForAck |
-| `sdk/tests/envelope.test.ts` | createEnvelope, signEnvelope, verifyEnvelope, validateEnvelope |
-| `sdk/tests/preferences.test.ts` | PreferencesManager — register, get, block/unblock |
-| `sdk/tests/setup.ts` | Jest global setup |
+| File | Tests | Coverage |
+|------|------|---------|
+| `contracts/src/tests.rs` | 31 | Rule priority, default policy, blocklist, owner-only writes (`cargo test`) |
+| `sdk/tests/envelope.test.ts` | 48 | createEnvelope, signEnvelope, verifyEnvelope, validateEnvelope |
+| `sdk/tests/client.test.ts` | 28 | ChiClient — send, checkPermission, waitForAck |
+| `sdk/tests/preferences.test.ts` | 25 | PreferencesManager — register, get, block/unblock |
+| `sdk/tests/setup.ts` | — | Jest global setup |
+
+**The router node has no automated tests** — integration is verified manually via curl.
+
+⚠️ `cargo test` on zero tests prints `test result: ok`. The contract had no tests at all
+until 2026-09-02 and reported success the whole time — check the count, not the colour.
+The contract suite is mutation-checked: inverting the rule-priority tiers, making
+`default_policy: Block` allow, or making the blocklist never match each fail 3–4 tests. If
+you change consent logic and nothing goes red, the test you need does not exist yet.
 
 ---
 
@@ -201,7 +248,8 @@ every ungoverned grant is logged, and `/v1/health` reports
 Agent                    Router Node              Registry (CosmWasm)
   │── POST /v1/send ────►│                              │
   │   (CHI envelope)     │── CheckPermission ──────────►│
-  │                      │◄── allowed/denied ───────────│
+  │                      │◄── allowed + rate_limit ─────│
+  │                      │── count sends in window       (SpacetimeDB)
   │                      │── Nullcone threat check      │
   │                      │── deliver via channel        │
   │                      │── write ack to SpacetimeDB   │
