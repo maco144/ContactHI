@@ -280,7 +280,9 @@ ssh rising 'cd /opt/services/contacthi/router && sudo docker compose -f docker-c
 only and touches neither SpacetimeDB nor the registry. Between 2026-03-13 and 2026-09-01 it
 returned `"status":"ok"` while every write 404'd. Smoke-test the real path instead:
 `POST /v1/send` → expect `202 delivered` → `GET /v1/status/{id}` → expect `delivered` with
-a non-null `channel_used`.
+a non-null `channel_used`. `scripts/diagnose.sh` does exactly that through the public URL,
+plus container state, SpacetimeDB heartbeat age, advertised endpoint and 24h log errors.
+Exit 1 on any FAIL. `created_at` is Unix **milliseconds** — an ISO string is a 400.
 
 ---
 
